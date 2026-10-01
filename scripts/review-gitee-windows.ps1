@@ -15,12 +15,12 @@ $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $env:PGPASSWORD = Read-ReviewBotSecret $config.databasePasswordFile
 $env:DATABASE_URL = $config.databaseUrl
 $workerRepositories = @()
-foreach ($repository in $repositories) {
+foreach ($configuredRepository in $repositories) {
   $workerRepositories += @{
-    id = [string] $repository.id
-    owner = [string] $repository.owner
-    name = [string] $repository.name
-    token = Read-ReviewBotSecret $repository.tokenFile
+    id = [string] $configuredRepository.id
+    owner = [string] $configuredRepository.owner
+    name = [string] $configuredRepository.name
+    token = Read-ReviewBotSecret $configuredRepository.tokenFile
   }
 }
 $env:GITEE_REPOSITORIES_JSON = ConvertTo-Json -InputObject @($workerRepositories) -Compress -Depth 4

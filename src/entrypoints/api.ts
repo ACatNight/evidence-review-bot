@@ -16,7 +16,11 @@ const gitee = parseGiteeWebhookRepositories(process.env.GITEE_WEBHOOKS_JSON);
 const app = createWebhookServer(
   pool,
   secret,
-  gitee.map((repository) => ({ repositoryId: repository.id, secret: repository.secret })),
+  gitee.map((repository) => ({
+    repositoryId: repository.id,
+    secret: repository.secret,
+    authMode: repository.authMode,
+  })),
 );
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {

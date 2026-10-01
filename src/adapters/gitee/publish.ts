@@ -103,21 +103,24 @@ export async function publishGiteeReport(
   }
   const commentPath = `${prefix}/pulls/${snapshot.pullRequestNumber}/comments`;
   const key = marker(snapshot);
+  const body = giteeReportText(snapshot, report);
   for (let page = 1; page <= 10; page++) {
     const response = await client.get(`${commentPath}?page=${page}&per_page=100`);
     if (!Array.isArray(response.data)) throw new Error("Unexpected Gitee comments response");
     for (const item of response.data) {
       const comment = giteeObject(item);
       if (typeof comment.body === "string" && comment.body.includes(key)) {
-        return giteeInteger(comment.id);
+        const id = giteeInteger(comment.id);
+        if (comment.body !== body) {
+          await client.patch(`${prefix}/pulls/comments/${id}`, { body });
+        }
+        return id;
       }
     }
     if (response.data.length < 100) break;
     if (page === 10) throw new Error("Gitee comment lookup was truncated");
   }
   if (!allowCreate) throw new Error("Gitee report publication outcome is uncertain");
-  const created = giteeObject(
-    (await client.post(commentPath, { body: giteeReportText(snapshot, report) })).data,
-  );
+  const created = giteeObject((await client.post(commentPath, { body })).data);
   return giteeInteger(created.id);
 }

@@ -57,6 +57,7 @@ try {
       $giteeWebhooks += @{
         id = [string] $repository.id
         secret = Read-ReviewBotSecret $repository.webhookSecretFile
+        authMode = if ($repository.webhookAuthMode) { [string] $repository.webhookAuthMode } else { 'signature' }
       }
     }
   }

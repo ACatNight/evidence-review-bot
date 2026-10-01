@@ -44,6 +44,25 @@ test("AI input is bounded, masks credential lines and skips private key files", 
   assert.equal(prepared.input.includes("src/private.ts"), false);
 });
 
+test("AI input includes changed Java lines", () => {
+  const prepared = prepareAiInput({
+    ...snapshot,
+    files: [
+      {
+        path: "src/Auth.java",
+        blobSha: "f".repeat(40),
+        baseText: "",
+        headText: "class Auth {\n  void check() {}\n}",
+        changedHeadLines: new Set([2]),
+      },
+    ],
+  });
+  assert.equal(prepared.eligibleFiles, 1);
+  assert.equal(prepared.inspectedFiles, 1);
+  assert.equal(prepared.input.includes('File: "src/Auth.java"'), true);
+  assert.equal(prepared.allowedLines.get("src/Auth.java")?.has(2), true);
+});
+
 test("AI findings must point to changed lines and failed calls are not clean reviews", async () => {
   const config = { apiKey: "test-key", model: "test-model", allowedRepositoryIds: new Set(["2"]) };
   const fake = {

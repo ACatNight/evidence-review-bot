@@ -1,13 +1,21 @@
 import Fastify from "fastify";
 import type { Pool } from "pg";
-import { parseGiteeWebhook, verifyGiteeWebhook } from "../adapters/gitee/webhook.js";
+import {
+  parseGiteeWebhook,
+  verifyGiteeWebhook,
+  verifyGiteeWebhookToken,
+} from "../adapters/gitee/webhook.js";
 import { parsePullRequestWebhook, verifyWebhookSignature } from "../adapters/github/webhook.js";
 import { enqueueSnapshot } from "../adapters/postgres/jobs.js";
 
 export function createWebhookServer(
   pool: Pool,
   secret: string,
-  gitee: readonly { readonly secret: string; readonly repositoryId: string }[] = [],
+  gitee: readonly {
+    readonly secret: string;
+    readonly repositoryId: string;
+    readonly authMode?: "signature" | "token";
+  }[] = [],
 ) {
   if (secret.length < 32) throw new Error("GITHUB_WEBHOOK_SECRET must be at least 32 characters");
   const app = Fastify({ bodyLimit: 1_048_576, logger: false });
@@ -78,11 +86,13 @@ export function createWebhookServer(
       const token = request.headers["x-gitee-token"];
       const timestamp = request.headers["x-gitee-timestamp"];
       const verified = gitee.find((entry) =>
-        verifyGiteeWebhook(
-          typeof token === "string" ? token : undefined,
-          typeof timestamp === "string" ? timestamp : undefined,
-          entry.secret,
-        ),
+        entry.authMode === "token"
+          ? verifyGiteeWebhookToken(typeof token === "string" ? token : undefined, entry.secret)
+          : verifyGiteeWebhook(
+              typeof token === "string" ? token : undefined,
+              typeof timestamp === "string" ? timestamp : undefined,
+              entry.secret,
+            ),
       );
       if (!verified) {
         return reply.code(401).send({ error: "invalid_signature" });

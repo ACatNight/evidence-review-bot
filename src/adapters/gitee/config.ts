@@ -8,7 +8,11 @@ const workerRepository = z.object({
   name: nonempty,
   token: nonempty,
 });
-const webhookRepository = z.object({ id: repositoryId, secret: z.string().min(32) });
+const webhookRepository = z.object({
+  id: repositoryId,
+  secret: z.string().min(32),
+  authMode: z.enum(["signature", "token"]).default("signature"),
+});
 
 function parseRepositories<T extends { id: string }>(
   json: string | undefined,

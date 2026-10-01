@@ -68,6 +68,10 @@ export class GiteeClient {
   post(path: string, body: Record<string, unknown>) {
     return this.request(path, "POST", body);
   }
+
+  patch(path: string, body: Record<string, unknown>) {
+    return this.request(path, "PATCH", body);
+  }
 }
 
 export function giteeObject(value: unknown): Record<string, unknown> {

@@ -77,7 +77,7 @@ function cleanOutput(text: string, maxLength: number): string {
 }
 
 function supportedPath(path: string): boolean {
-  return /\.(?:[cm]?[jt]s|[jt]sx)$/i.test(path);
+  return /\.(?:[cm]?[jt]s|[jt]sx|java)$/i.test(path);
 }
 
 export function prepareAiInput(snapshot: PullRequestSnapshot): {

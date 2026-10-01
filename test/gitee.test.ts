@@ -9,7 +9,11 @@ import {
 } from "../src/adapters/gitee/config.js";
 import { giteeReportText, publishGiteeReport } from "../src/adapters/gitee/publish.js";
 import { fetchGiteeSnapshot } from "../src/adapters/gitee/snapshot.js";
-import { parseGiteeWebhook, verifyGiteeWebhook } from "../src/adapters/gitee/webhook.js";
+import {
+  parseGiteeWebhook,
+  verifyGiteeWebhook,
+  verifyGiteeWebhookToken,
+} from "../src/adapters/gitee/webhook.js";
 import type { PullRequestSnapshot } from "../src/adapters/github/snapshot.js";
 import { AI_NOT_RUN } from "../src/adapters/openai/security-review.js";
 import { migrate } from "../src/adapters/postgres/migrate.js";
@@ -84,6 +88,14 @@ test("Gitee Webhook checks timestamped signature and repository identity", () =>
   assert.equal(parseGiteeWebhook(body, "Push Hook", repository.id).kind, "ignored");
 });
 
+test("Gitee fixed token mode accepts only the configured token", () => {
+  const secret = "a".repeat(64);
+  assert.equal(verifyGiteeWebhookToken(secret, secret), true);
+  assert.equal(verifyGiteeWebhookToken("b".repeat(64), secret), false);
+  assert.equal(verifyGiteeWebhookToken(undefined, secret), false);
+  assert.equal(verifyGiteeWebhookToken(secret.slice(1), secret), false);
+});
+
 test("Gitee repository configuration rejects duplicate IDs", () => {
   const first = {
     id: repository.id,
@@ -96,6 +108,59 @@ test("Gitee repository configuration rejects duplicate IDs", () => {
   assert.throws(() =>
     parseGiteeWebhookRepositories(JSON.stringify([{ id: repository.id, secret: "short" }])),
   );
+  assert.equal(
+    parseGiteeWebhookRepositories(
+      JSON.stringify([{ id: repository.id, secret: "s".repeat(32) }]),
+    )[0]?.authMode,
+    "signature",
+  );
+  assert.equal(
+    parseGiteeWebhookRepositories(
+      JSON.stringify([{ id: repository.id, secret: "s".repeat(32), authMode: "token" }]),
+    )[0]?.authMode,
+    "token",
+  );
+  assert.throws(() =>
+    parseGiteeWebhookRepositories(
+      JSON.stringify([{ id: repository.id, secret: "s".repeat(32), authMode: "unknown" }]),
+    ),
+  );
+});
+
+test("Gitee fixed token mode authenticates a real PR event", async () => {
+  const secret = "s".repeat(64);
+  const body = Buffer.from(
+    JSON.stringify({
+      hook_name: "merge_request_hooks",
+      repository: { id: Number(repository.id) },
+      pull_request: pr,
+    }),
+  );
+  const pool = {
+    query: async () => ({ rows: [], rowCount: 1 }),
+    connect: async () => ({
+      query: async () => ({ rows: [{ id: "1" }], rowCount: 1 }),
+      release: () => undefined,
+    }),
+  } as unknown as Pool;
+  const app = createWebhookServer(pool, "github-secret-at-least-32-characters", [
+    { secret, repositoryId: repository.id, authMode: "token" },
+  ]);
+  try {
+    const response = await app.inject({
+      method: "POST",
+      url: "/webhooks/gitee",
+      headers: {
+        "content-type": "application/json",
+        "x-gitee-event": "Merge Request Hook",
+        "x-gitee-token": secret,
+      },
+      payload: body,
+    });
+    assert.equal(response.statusCode, 202);
+  } finally {
+    await app.close();
+  }
 });
 
 test("a valid signature from another configured Gitee repository cannot queue this PR", async () => {
@@ -193,6 +258,7 @@ test("Chinese Gitee report is partial and publication reuses its marker", async 
   assert.match(body, /不代表代码安全/);
   let comment: { id: number; body: string } | null = null;
   let posts = 0;
+  let patches = 0;
   const transport = async (input: string | URL | Request, init?: RequestInit) => {
     const path = new URL(String(input)).pathname;
     if (path.endsWith("/pulls/1")) return new Response(JSON.stringify(pr));
@@ -204,12 +270,30 @@ test("Chinese Gitee report is partial and publication reuses its marker", async 
       }
       return new Response(JSON.stringify(comment ? [comment] : []));
     }
+    if (path.endsWith("/pulls/comments/42") && init?.method === "PATCH") {
+      patches++;
+      comment = { id: 42, body: JSON.parse(String(init.body)).body };
+      return new Response(JSON.stringify(comment));
+    }
     throw new Error(`Unexpected path ${path}`);
   };
   const client = new GiteeClient("test-token", transport as typeof fetch);
   assert.equal(await publishGiteeReport(client, repository, snapshot, report, true), 42);
   assert.equal(await publishGiteeReport(client, repository, snapshot, report, true), 42);
   assert.equal(posts, 1);
+  assert.equal(patches, 0);
+  assert.equal(
+    await publishGiteeReport(
+      client,
+      repository,
+      snapshot,
+      { ...report, aiReview: { ...report.aiReview, state: "complete" } },
+      true,
+    ),
+    42,
+  );
+  assert.equal(posts, 1);
+  assert.equal(patches, 1);
 });
 
 test("Chinese report names fine-grained tokens without exposing candidate values", () => {

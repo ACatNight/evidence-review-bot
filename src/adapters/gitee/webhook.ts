@@ -33,6 +33,13 @@ export function verifyGiteeWebhook(
   );
 }
 
+export function verifyGiteeWebhookToken(token: string | undefined, secret: string): boolean {
+  if (!token) return false;
+  const expected = Buffer.from(secret);
+  const provided = Buffer.from(token);
+  return expected.length === provided.length && timingSafeEqual(expected, provided);
+}
+
 export function parseGiteeWebhook(
   body: Buffer,
   eventType: string | undefined,

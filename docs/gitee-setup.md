@@ -19,7 +19,7 @@
 
 - URL：`https://blandness-epilogue-garden.ngrok-free.dev/webhooks/gitee`
 - 事件：仅 **Pull Request**；启用钩子。
-- 安全方式：**签名密钥**，不要选择明文密码。密钥需与本机文件中的值完全一致。
+- 当前安全方式：**固定令牌**。Gitee 此钩子通过 `X-Gitee-Token` 直接发送密钥；本机配置 `webhookAuthMode: "token"`，并按固定时间比较令牌。密钥需与本机文件中的值完全一致。新建钩子优先使用签名密钥模式（默认 `signature`）。
 
 在本机 PowerShell 查看密钥以核对 Gitee 页面，命令不会把密钥写入命令历史，但会显示在当前终端：
 
@@ -38,7 +38,7 @@ powershell -NoProfile -File .\scripts\review-gitee-windows.ps1 -Repository 'vcag
 
 ## 自动触发
 
-手动发布验收通过后，在 Gitee 仓库的「管理」→「WebHooks」创建钩子，只选择 **Pull Request**，把可公网访问的 HTTPS 地址填为 `https://你的域名/webhooks/gitee`。请选择**签名密钥**模式，不使用明文密码模式；把同一个签名密钥保存在仓库外文件，并在配置向导中填写该文件路径，然后重启 API。Gitee 官方文档说明请求头包含 `X-Gitee-Token`、`X-Gitee-Timestamp`、`X-Gitee-Event`；本项目校验一小时内的时间戳和 HMAC 签名，仅接受配置仓库的 `Merge Request Hook`。相同载荷会按摘要去重。
+手动发布验收通过后，在 Gitee 仓库的「管理」→「WebHooks」创建钩子，只选择 **Pull Request**，把可公网访问的 HTTPS 地址填为 `https://你的域名/webhooks/gitee`。优先选择**签名密钥**模式，把密钥保存在仓库外文件，`webhookAuthMode` 使用默认值 `signature`；此模式校验一小时内的时间戳和 HMAC 签名。若钩子按固定令牌模式发送原样 `X-Gitee-Token`，明确设置该仓库的 `webhookAuthMode` 为 `token` 并使用长度至少 32 字符的随机密钥。两种模式都只接受配置仓库的 `Merge Request Hook`，相同载荷按摘要去重。修改配置后重启 API。
 
 当前临时 Cloudflare 隧道的域名可能在重启后变化；需同步更新 Gitee Webhook URL。无自有域名时可使用[Windows 快速部署](deployment-windows.md)中的 ngrok 固定 Dev Domain。Gitee 的「测试 WebHook」只用于检查测试载荷能否投递；最终验收应更新测试 PR 的提交，确认真实 PR 事件入队并随新 SHA 发布中文报告。不要把 Gitee Webhook 发往 `/webhooks/github`。
 

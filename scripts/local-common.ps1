@@ -23,6 +23,7 @@ function Get-GiteeRepositories($config) {
     id = [string] $config.giteeRepositoryId
     tokenFile = $config.giteeTokenFile
     webhookSecretFile = $config.giteeWebhookSecretFile
+    webhookAuthMode = if ($config.giteeWebhookAuthMode) { $config.giteeWebhookAuthMode } else { 'signature' }
   }
   foreach ($repository in @($config.giteeAdditionalRepositories)) {
     if ($repository) { $repositories += $repository }
