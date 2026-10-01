@@ -19,7 +19,7 @@ function Read-ReviewBotSecret([string] $path) {
     throw "Secret file not found: $path"
   }
   if ($path.EndsWith('.dpapi', [StringComparison]::OrdinalIgnoreCase)) {
-    $secure = Get-Content -LiteralPath $path -Raw | ConvertTo-SecureString
+    $secure = (Get-Content -LiteralPath $path -Raw).Trim() | ConvertTo-SecureString
     $pointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
     try { return [Runtime.InteropServices.Marshal]::PtrToStringBSTR($pointer) }
     finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($pointer) }

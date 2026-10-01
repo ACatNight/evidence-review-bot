@@ -94,9 +94,12 @@ try {
   if ($worker.HasExited) { throw 'Worker stopped unexpectedly. See worker-error.log in the configuration directory.' }
 
   if ($config.ngrokEnabled) {
+    $supportsUrl = (& $config.ngrokExecutablePath http --help | Select-String -SimpleMatch '--url string' -Quiet)
+    $endpointArgument = if ($supportsUrl) { "--url=https://$($config.ngrokDomain)" }
+    else { "--domain=$($config.ngrokDomain)" }
     $env:NGROK_AUTHTOKEN = Read-ReviewBotSecret $config.ngrokAuthtokenFile
     try {
-      $tunnel = Start-Process -FilePath $config.ngrokExecutablePath -ArgumentList @('http', "127.0.0.1:$($config.port)", "--domain=$($config.ngrokDomain)", '--log=stdout', '--log-format=json') -WorkingDirectory $homeDirectory -WindowStyle Hidden -RedirectStandardOutput (Join-Path $homeDirectory 'tunnel-out.log') -RedirectStandardError (Join-Path $homeDirectory 'tunnel-error.log') -PassThru
+      $tunnel = Start-Process -FilePath $config.ngrokExecutablePath -ArgumentList @('http', "127.0.0.1:$($config.port)", $endpointArgument, '--log=stdout', '--log-format=json') -WorkingDirectory $homeDirectory -WindowStyle Hidden -RedirectStandardOutput (Join-Path $homeDirectory 'tunnel-out.log') -RedirectStandardError (Join-Path $homeDirectory 'tunnel-error.log') -PassThru
     } finally {
       Remove-Item Env:NGROK_AUTHTOKEN -ErrorAction SilentlyContinue
     }

@@ -46,7 +46,7 @@ GitHub App 的 Webhook URL 仍必须是可从 GitHub 访问的 HTTPS 地址，�
    $secure | ConvertFrom-SecureString | Set-Content -LiteralPath 'D:\Tools\evidence-review-bot\ngrok-authtoken.dpapi'
    ```
 
-3. 运行 `scripts/configure-windows.ps1`，选择 ngrok 固定域名，填写 `D:\Tools\ngrok\ngrok.exe`、令牌文件路径和分配的域名（不含 `https://`）。向导会自动设置 GitHub Webhook URL。运行 `stop-windows.ps1`、`start-windows.ps1` 后，启动器会验证 `https://域名/healthz` 并打印 GitHub/Gitee 的完整 Webhook URL。令牌通过进程环境变量传给 ngrok，不出现在命令行参数里。
+3. 运行 `scripts/configure-windows.ps1`，选择 ngrok 固定域名，填写新版 `ngrok.exe` 路径、令牌文件路径和分配的域名（不含 `https://`）。向导会自动设置 GitHub Webhook URL。运行 `stop-windows.ps1`、`start-windows.ps1` 后，启动器会验证 `https://域名/healthz` 并打印 GitHub/Gitee 的完整 Webhook URL。令牌通过进程环境变量传给 ngrok，不出现在命令行参数里。ngrok 免费账号可能拒绝过旧的客户端，应使用[官方下载页](https://ngrok.com/download)提供的当前版本。
 4. 将 GitHub App 的 Webhook URL 更新为 `https://域名/webhooks/github`，把 Gitee 仓库 WebHook URL 更新为 `https://域名/webhooks/gitee`。保留原有签名密钥和事件订阅。两边都更新并验证真实 PR 投递后，再停止旧的临时 Cloudflare 隧道。
 
 ngrok 免费域名的使用量和限制以账号页面为准。关机后公网入口不可用；要持续在线，仍需把 API、Worker、数据库和隧道迁移到持续运行的主机。

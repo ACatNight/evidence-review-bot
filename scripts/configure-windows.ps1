@@ -41,7 +41,7 @@ $ngrokExecutablePath = ''
 $ngrokAuthtokenFile = ''
 $ngrokDomain = ''
 if ($ngrokEnabled) {
-  $ngrokExecutablePath = Ask 'ngrok.exe path' $(if ($prior.ngrokExecutablePath) { $prior.ngrokExecutablePath } else { 'D:\Tools\ngrok\ngrok.exe' })
+  $ngrokExecutablePath = Ask 'ngrok.exe path' $(if ($prior.ngrokExecutablePath) { $prior.ngrokExecutablePath } elseif (Test-Path -LiteralPath 'D:\Tools\ngrok\stable\ngrok.exe') { 'D:\Tools\ngrok\stable\ngrok.exe' } else { 'D:\Tools\ngrok\ngrok.exe' })
   $ngrokAuthtokenFile = Ask 'ngrok authtoken file (.dpapi or text)' $prior.ngrokAuthtokenFile
   $ngrokDomain = Ask 'Assigned ngrok domain (without https://)' $prior.ngrokDomain
 }
