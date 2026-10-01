@@ -271,6 +271,20 @@ test("Chinese Gitee report is partial and publication reuses its marker", async 
     }),
     /未进入 AI 审查的文件：[\s\S]*src\/Hidden.java/,
   );
+  assert.match(
+    giteeReportText(snapshot, {
+      ...report,
+      aiReview: {
+        ...report.aiReview,
+        state: "partial",
+        inspectedFiles: 14,
+        eligibleFiles: 14,
+        reason: "context_truncated",
+        unreviewedPaths: [],
+      },
+    }),
+    /部分文件的代码上下文超出输入上限/,
+  );
   let comment: { id: number; body: string } | null = null;
   let posts = 0;
   let patches = 0;

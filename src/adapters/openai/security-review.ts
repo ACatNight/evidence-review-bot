@@ -203,7 +203,7 @@ export async function reviewWithOpenAI(
       const prepared = prepareAiInput({ ...snapshot, files: remaining });
       if (prepared.inspectedFiles === 0) break;
       try {
-        const response = await openai.responses.parse({
+        const response = await openai.responses.create({
           model: config.model,
           store: false,
           max_output_tokens: 4_000,
@@ -228,13 +228,26 @@ export async function reviewWithOpenAI(
               : "AiIncompleteResponseError";
           throw error;
         }
-        if (!response.output_parsed) {
+        let parsed: z.infer<typeof responseSchema> | null = null;
+        for (const item of response.output) {
+          if (item.type !== "message") continue;
+          for (const content of item.content) {
+            if (content.type !== "output_text") continue;
+            try {
+              const candidate = responseSchema.safeParse(JSON.parse(content.text));
+              if (candidate.success) parsed = candidate.data;
+            } catch {
+              // Some compatible providers emit prose before the schema response.
+            }
+          }
+        }
+        if (!parsed) {
           const error = new Error("OpenAI response missing parsed output");
           error.name = "AiIncompleteResponseError";
           throw error;
         }
         findings.push(
-          ...response.output_parsed.findings
+          ...parsed.findings
             .filter(
               (finding) =>
                 finding.path.length <= 300 &&
@@ -266,7 +279,17 @@ export async function reviewWithOpenAI(
       inspectedFiles,
       eligibleFiles: eligible.length,
       findings: findings.slice(0, 10),
-      reason: failed ? errorReason : findings.length > 10 ? "finding_limit" : null,
+      reason: failed
+        ? errorReason
+        : remaining.length > 0
+          ? "unreviewed_files"
+          : truncatedContext
+            ? "context_truncated"
+            : snapshot.truncatedFiles
+              ? "file_list_truncated"
+              : findings.length > 10
+                ? "finding_limit"
+                : null,
       unreviewedPaths: remaining.map((file) => file.path),
     };
   } catch (error) {

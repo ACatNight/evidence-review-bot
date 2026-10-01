@@ -8,6 +8,10 @@ function display(value: string, limit = 180): string {
   return value.replace(/[\r\n\t<>`]/g, " ").slice(0, limit);
 }
 
+function sentence(value: string, limit: number): string {
+  return `${display(value, limit).replace(/[。.!！?？;；\s]+$/u, "")}。`;
+}
+
 function marker(snapshot: PullRequestSnapshot): string {
   return `<!-- evidence-review-bot:gitee:${snapshot.repositoryId}:${snapshot.pullRequestNumber}:${snapshot.baseSha}:${snapshot.headSha} -->`;
 }
@@ -94,13 +98,21 @@ export function giteeReportText(snapshot: PullRequestSnapshot, report: ReviewRep
     api_output_limit: "AI 输出达到长度上限",
     api_response_incomplete: "AI 返回结果不完整",
     api_unavailable_or_invalid_response: "AI 服务调用失败或返回内容无效",
+    unreviewed_files: "部分符合条件的文件尚未进入 AI 审查",
+    context_truncated: "部分文件的代码上下文超出输入上限，未展示的代码行尚未审查",
+    file_list_truncated: "变更文件列表已截断，后续文件尚未审查",
+    finding_limit: "候选问题超过报告展示上限，部分候选未列出",
   };
   if (aiReview.reason && aiFailureText[aiReview.reason]) {
-    lines.push(`${aiFailureText[aiReview.reason]}；未完成的文件不能视为通过。`);
+    lines.push(
+      aiReview.reason === "context_truncated"
+        ? `${aiFailureText[aiReview.reason]}。`
+        : `${aiFailureText[aiReview.reason]}；未完成的范围不能视为通过。`,
+    );
   }
   for (const finding of aiReview.findings) {
     lines.push(
-      `- \`${display(finding.path)}:${finding.line}\` [风险：${severityText[finding.severity] ?? finding.severity}；置信度：${severityText[finding.confidence] ?? finding.confidence}] ${display(finding.title)}：${display(finding.evidence, 500)}。建议：${display(finding.recommendation, 500)}`,
+      `- \`${display(finding.path)}:${finding.line}\` [风险：${severityText[finding.severity] ?? finding.severity}；置信度：${severityText[finding.confidence] ?? finding.confidence}] ${display(finding.title)}：${sentence(finding.evidence, 500)} 建议：${sentence(finding.recommendation, 500)}`,
     );
   }
   lines.push(

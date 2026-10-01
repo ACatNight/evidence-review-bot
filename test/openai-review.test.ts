@@ -6,6 +6,16 @@ import { prepareAiInput, reviewWithOpenAI } from "../src/adapters/openai/securit
 
 const token = `ghp_${"A".repeat(36)}`;
 const fineGrainedToken = `github_pat_${"B".repeat(82)}`;
+
+function responseWithFindings(findings: unknown, preface?: string) {
+  return {
+    status: "completed",
+    output: [
+      ...(preface ? [{ type: "message", content: [{ type: "output_text", text: preface }] }] : []),
+      { type: "message", content: [{ type: "output_text", text: JSON.stringify({ findings }) }] },
+    ],
+  };
+}
 const snapshot: PullRequestSnapshot = {
   installationId: "1",
   repositoryId: "2",
@@ -67,38 +77,36 @@ test("AI findings must point to changed lines and failed calls are not clean rev
   const config = { apiKey: "test-key", model: "test-model", allowedRepositoryIds: new Set(["2"]) };
   const fake = {
     responses: {
-      parse: async (request: { store: boolean; input: unknown; max_output_tokens: number }) => {
+      create: async (request: { store: boolean; input: unknown; max_output_tokens: number }) => {
         assert.equal(request.store, false);
         assert.equal(request.max_output_tokens, 4_000);
         assert.equal(JSON.stringify(request.input).includes(token), false);
         assert.equal(JSON.stringify(request.input).includes(fineGrainedToken), false);
-        return {
-          status: "completed",
-          output_parsed: {
-            findings: [
-              {
-                path: "src/auth.ts",
-                line: 3,
-                category: "access_control",
-                severity: "high",
-                confidence: "medium",
-                title: "Authorization bypass",
-                evidence: `The changed line grants access without checking a role. ${fineGrainedToken}`,
-                recommendation: "Check the authorized role before granting access.",
-              },
-              {
-                path: "src/auth.ts",
-                line: 100,
-                category: "other",
-                severity: "high",
-                confidence: "high",
-                title: "Invented line",
-                evidence: "Not in changed code.",
-                recommendation: "None.",
-              },
-            ],
-          },
-        };
+        return responseWithFindings(
+          [
+            {
+              path: "src/auth.ts",
+              line: 3,
+              category: "access_control",
+              severity: "high",
+              confidence: "medium",
+              title: "Authorization bypass",
+              evidence: `The changed line grants access without checking a role. ${fineGrainedToken}`,
+              recommendation: "Check the authorized role before granting access.",
+            },
+            {
+              path: "src/auth.ts",
+              line: 100,
+              category: "other",
+              severity: "high",
+              confidence: "high",
+              title: "Invented line",
+              evidence: "Not in changed code.",
+              recommendation: "None.",
+            },
+          ],
+          "这是不符合 JSON 格式的前置说明。",
+        );
       },
     },
   } as unknown as OpenAI;
@@ -110,7 +118,7 @@ test("AI findings must point to changed lines and failed calls are not clean rev
 
   const failing = {
     responses: {
-      parse: async () => {
+      create: async () => {
         throw new Error("API error");
       },
     },
@@ -120,7 +128,7 @@ test("AI findings must point to changed lines and failed calls are not clean rev
   assert.equal(error.findings.length, 0);
   const rateLimited = {
     responses: {
-      parse: async () => {
+      create: async () => {
         throw Object.assign(new Error("rate limit"), { status: 429 });
       },
     },
@@ -128,7 +136,7 @@ test("AI findings must point to changed lines and failed calls are not clean rev
   assert.equal((await reviewWithOpenAI(snapshot, config, rateLimited)).reason, "api_rate_limited");
   const incomplete = {
     responses: {
-      parse: async () => ({
+      create: async () => ({
         status: "incomplete",
         incomplete_details: { reason: "max_output_tokens" },
       }),
@@ -158,7 +166,7 @@ test("AI review reports partial coverage when changed lines exceed the prompt li
   assert.equal(prepared.allowedLines.get("src/auth.ts")?.has(200), false);
   const fake = {
     responses: {
-      parse: async () => ({ status: "completed", output_parsed: { findings: [] } }),
+      create: async () => responseWithFindings([]),
     },
   } as unknown as OpenAI;
   const result = await reviewWithOpenAI(
@@ -167,6 +175,8 @@ test("AI review reports partial coverage when changed lines exceed the prompt li
     fake,
   );
   assert.equal(result.state, "partial");
+  assert.equal(result.reason, "context_truncated");
+  assert.deepEqual(result.unreviewedPaths, []);
 });
 
 test("AI review batches Java changes and validates findings in later batches", async () => {
@@ -180,28 +190,25 @@ test("AI review batches Java changes and validates findings in later batches", a
   let calls = 0;
   const fake = {
     responses: {
-      parse: async (request: { input: unknown }) => {
+      create: async (request: { input: unknown }) => {
         calls++;
         const prompt = JSON.stringify(request.input);
-        return {
-          status: "completed",
-          output_parsed: {
-            findings: prompt.includes("src/File13.java")
-              ? [
-                  {
-                    path: "src/File13.java",
-                    line: 1,
-                    category: "other",
-                    severity: "medium",
-                    confidence: "medium",
-                    title: "Later batch finding",
-                    evidence: "Changed line",
-                    recommendation: "Review this line",
-                  },
-                ]
-              : [],
-          },
-        };
+        return responseWithFindings(
+          prompt.includes("src/File13.java")
+            ? [
+                {
+                  path: "src/File13.java",
+                  line: 1,
+                  category: "other",
+                  severity: "medium",
+                  confidence: "medium",
+                  title: "Later batch finding",
+                  evidence: "Changed line",
+                  recommendation: "Review this line",
+                },
+              ]
+            : [],
+        );
       },
     },
   } as unknown as OpenAI;
