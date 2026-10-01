@@ -14,13 +14,14 @@ export interface StoredReport {
 
 export async function snapshotTarget(pool: Pool, job: ClaimedJob): Promise<SnapshotTarget> {
   const result = await pool.query<{
+    provider: SnapshotTarget["provider"];
     installation_id: string;
     repository_id: string;
     pull_request_id: string;
     base_sha: string | null;
     head_sha: string | null;
   }>(
-    `SELECT delivery.installation_id, delivery.repository_id, delivery.pull_request_id,
+    `SELECT delivery.provider, delivery.installation_id, delivery.repository_id, delivery.pull_request_id,
             delivery.base_sha, delivery.head_sha
      FROM review_bot.review_job AS job
      JOIN review_bot.webhook_delivery AS delivery ON delivery.id = job.delivery_id
@@ -30,6 +31,7 @@ export async function snapshotTarget(pool: Pool, job: ClaimedJob): Promise<Snaps
   const row = result.rows[0];
   if (!row) throw new Error("Snapshot job has no delivery");
   return {
+    provider: row.provider,
     installationId: row.installation_id,
     repositoryId: row.repository_id,
     pullRequestNumber: Number(row.pull_request_id),

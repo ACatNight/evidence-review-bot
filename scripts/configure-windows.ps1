@@ -36,6 +36,20 @@ $postgresDataPath = if ($postgresCtlPath) {
   Ask 'PostgreSQL data directory' $prior.postgresDataPath
 } else { '' }
 $publicWebhookUrl = Ask 'Public HTTPS Webhook URL (optional)' $prior.publicWebhookUrl
+$giteeDefault = if ($prior.giteeEnabled) { 'y' } else { 'n' }
+$giteeEnabled = (Ask 'Enable Gitee PR review? (y/n)' $giteeDefault) -match '^[yY]$'
+$giteeTokenFile = ''
+$giteeOwner = ''
+$giteeRepo = ''
+$giteeRepositoryId = ''
+$giteeWebhookSecretFile = ''
+if ($giteeEnabled) {
+  $giteeTokenFile = Ask 'Gitee API token file (.dpapi or text)' $prior.giteeTokenFile
+  $giteeOwner = Ask 'Gitee repository owner' $prior.giteeOwner
+  $giteeRepo = Ask 'Gitee repository name' $prior.giteeRepo
+  $giteeRepositoryId = Ask 'Gitee numeric repository ID' $prior.giteeRepositoryId
+  $giteeWebhookSecretFile = Ask 'Gitee Webhook signing key file (optional until webhook setup)' $prior.giteeWebhookSecretFile
+}
 $aiDefault = if ($prior.aiEnabled) { 'y' } else { 'n' }
 $aiEnabled = (Ask 'Enable AI review for selected repositories? (y/n)' $aiDefault) -match '^[yY]$'
 $aiKeyFile = ''
@@ -80,6 +94,20 @@ if ($postgresCtlPath) {
 if ($publicWebhookUrl -and $publicWebhookUrl -notmatch '^https://.+/webhooks/github$') {
   throw 'Public Webhook URL must be HTTPS and end in /webhooks/github.'
 }
+if ($giteeEnabled) {
+  Require-File 'Gitee API token' $giteeTokenFile
+  if ($giteeOwner -notmatch '^[A-Za-z0-9_.-]+$' -or
+      $giteeRepo -notmatch '^[A-Za-z0-9_.-]+$' -or
+      $giteeRepositoryId -notmatch '^\d+$') {
+    throw 'Gitee owner, repository name or numeric repository ID is invalid.'
+  }
+  if ($giteeWebhookSecretFile) {
+    Require-File 'Gitee Webhook signing key' $giteeWebhookSecretFile
+    if ((Read-ReviewBotSecret $giteeWebhookSecretFile).Length -lt 32) {
+      throw 'Gitee Webhook signing key must contain at least 32 characters.'
+    }
+  }
+}
 if ($aiEnabled) {
   Require-File 'AI API key' $aiKeyFile
   if (-not $aiModel -or $aiRepositories -notmatch '^\d+(,\s*\d+)*$') {
@@ -104,6 +132,12 @@ $config = [ordered]@{
   postgresCtlPath = $postgresCtlPath
   postgresDataPath = $postgresDataPath
   publicWebhookUrl = $publicWebhookUrl
+  giteeEnabled = $giteeEnabled
+  giteeTokenFile = $giteeTokenFile
+  giteeOwner = $giteeOwner
+  giteeRepo = $giteeRepo
+  giteeRepositoryId = $giteeRepositoryId
+  giteeWebhookSecretFile = $giteeWebhookSecretFile
   aiEnabled = $aiEnabled
   aiKeyFile = $aiKeyFile
   aiModel = $aiModel

@@ -34,6 +34,7 @@ export interface PullRequestSnapshot {
 }
 
 export interface SnapshotTarget {
+  readonly provider: "github" | "gitee";
   readonly installationId: string;
   readonly repositoryId: string;
   readonly pullRequestNumber: number;

@@ -1,9 +1,10 @@
 import { readFile } from "node:fs/promises";
 import { setTimeout as delay } from "node:timers/promises";
 import { Pool } from "pg";
+import { GiteeClient } from "../adapters/gitee/client.js";
 import { GitHubClient } from "../adapters/github/client.js";
 import type { AiReviewConfig } from "../adapters/openai/security-review.js";
-import { runOneJob } from "../application/worker.js";
+import { type GiteeWorkerConfig, runOneJob } from "../application/worker.js";
 
 const connectionString = process.env.DATABASE_URL;
 const appId = process.env.GITHUB_APP_ID;
@@ -20,6 +21,16 @@ if (!/^\d+$/.test(appId) || !/^[a-f0-9]{64,}$/i.test(hmacHex) || hmacHex.length 
 
 const privateKey = await readFile(privateKeyPath, "utf8");
 const client = new GitHubClient(appId, privateKey);
+let gitee: GiteeWorkerConfig | null = null;
+if (process.env.GITEE_API_TOKEN) {
+  const owner = process.env.GITEE_OWNER;
+  const name = process.env.GITEE_REPO;
+  const id = process.env.GITEE_REPOSITORY_ID;
+  if (!owner || !name || !id || !/^\d+$/.test(id)) {
+    throw new Error("GITEE_OWNER, GITEE_REPO and GITEE_REPOSITORY_ID are required");
+  }
+  gitee = { client: new GiteeClient(process.env.GITEE_API_TOKEN), repository: { owner, name, id } };
+}
 let aiConfig: AiReviewConfig | null = null;
 if (process.env.OPENAI_REVIEW_ENABLED === "true") {
   const apiKey = process.env.OPENAI_API_KEY;
@@ -59,7 +70,7 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
 }
 try {
   do {
-    const worked = await runOneJob(pool, client, Buffer.from(hmacHex, "hex"), aiConfig);
+    const worked = await runOneJob(pool, client, Buffer.from(hmacHex, "hex"), aiConfig, gitee);
     if (process.argv.includes("--once")) break;
     if (!worked) await delay(3_000);
   } while (!stopping);

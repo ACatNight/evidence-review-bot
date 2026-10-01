@@ -3,6 +3,8 @@ import { createWebhookServer } from "../application/webhook-server.js";
 
 const connectionString = process.env.DATABASE_URL;
 const secret = process.env.GITHUB_WEBHOOK_SECRET;
+const giteeSecret = process.env.GITEE_WEBHOOK_SECRET;
+const giteeRepositoryId = process.env.GITEE_REPOSITORY_ID;
 if (!connectionString || !secret)
   throw new Error("DATABASE_URL and GITHUB_WEBHOOK_SECRET are required");
 
@@ -11,7 +13,16 @@ if (!Number.isSafeInteger(port) || port < 1 || port > 65535)
   throw new Error("PORT must be 1-65535");
 const host = process.env.HOST ?? "127.0.0.1";
 const pool = new Pool({ connectionString });
-const app = createWebhookServer(pool, secret);
+if ((giteeSecret && !giteeRepositoryId) || (!giteeSecret && giteeRepositoryId)) {
+  throw new Error("GITEE_WEBHOOK_SECRET and GITEE_REPOSITORY_ID must be set together");
+}
+const app = createWebhookServer(
+  pool,
+  secret,
+  giteeSecret && giteeRepositoryId
+    ? { secret: giteeSecret, repositoryId: giteeRepositoryId }
+    : undefined,
+);
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.once(signal, () => {

@@ -2,7 +2,7 @@
 
 开放、平台无关的 PR Review Engine，以确定性检查和可验证证据支持审查决策。
 
-**当前状态：GitHub Webhook、固定 SHA 的 PR 快照、SEC-001 候选扫描和 Check 汇总已接通。可选 OpenAI 安全审查默认关闭；PR 工作流另跑 Lint、类型检查、测试、npm 依赖审计和 CodeQL。反馈、抑制、回放和完整审计仍未实现；当前只适合测试仓库联调。**
+**当前状态：GitHub Webhook、固定 SHA 的 PR 快照、SEC-001 候选扫描和 Check 汇总已接通；Gitee 单仓库适配提供 Webhook、固定 SHA 快照和中文 PR 评论报告。可选 OpenAI 安全审查默认关闭；GitHub PR 工作流另跑 Lint、类型检查、测试、npm 依赖审计和 CodeQL。反馈、抑制、回放和完整审计仍未实现；当前只适合测试仓库联调。**
 
 项目希望减少没有依据的审查评论：先使用可验证的规则发现问题，再按需获取上下文和调用模型，并把每项结论绑定到具体代码快照、规则版本和证据来源。
 
@@ -31,6 +31,7 @@ GitHub、Gitee、GitLab 接入属于平台兼容性。自托管、自选模型�
 | [SEC-001 当前实现边界](docs/sec-001-implementation.md) | 已支持格式、漏报边界与接入前验证 |
 | [本地开发与数据库验证](docs/local-development.md) | D 盘 PostgreSQL 实例、迁移与集成测试 |
 | [Windows 快速部署](docs/deployment-windows.md) | 首次填写配置，之后一条命令启动或停止 |
+| [Gitee 测试仓库接入](docs/gitee-setup.md) | 令牌、Webhook 签名和中文 PR 报告验收 |
 | [安全与数据处理](docs/security.md) | 信任边界、脱敏、访问隔离、留存 |
 | [架构决策记录](docs/decisions.md) | 推荐方案、取舍、待验证问题 |
 | [实施路线](docs/roadmap.md) | 阶段交付、验收、试点门槛 |
