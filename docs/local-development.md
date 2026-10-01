@@ -70,6 +70,15 @@ npm run start:api
 
 临时隧道重启后地址可能变化。先访问隧道的 `/healthz` 验证转发，再到 GitHub App 的 Advanced / Recent Deliveries 检查投递。正常接收目标 PR 事件返回 HTTP `202`，响应 `{"queued":true}`；重复投递返回 `{"queued":false}`。`ping` 等不处理的事件也返回 `202` 和 `queued:false`。签名不一致返回 `401`，此时检查 GitHub 和 API 是否读取同一个密钥。
 
+规则升级后，如需对仍打开的 PR 手动重跑，不必制造新提交或重放已去重的 Webhook。使用已配置的本机 App 与数据库，在仓库根目录执行：
+
+```powershell
+# 将 123 替换为当前打开的 PR 编号
+powershell -NoProfile -File .\scripts\review-github-windows.ps1 -Owner ACatNight -Repository evidence-review-bot -PullRequest 123
+```
+
+命令先确认 App 安装、仓库身份及 PR 当前状态，再将固定 base/head SHA 入队；Worker 发布前仍会复核 PR。相同 head 的 GitHub Check 会被更新。该命令只供本机受信任维护者使用，不暴露为公网重跑接口。
+
 Worker 需要 App ID、私钥路径和稳定的租户 HMAC 主密钥。主密钥在仓库外生成一次，后续从同一文件读取。以下命令在另一个 PowerShell 窗口运行；处理完当前一个任务就退出，持续处理改用 `npm run start:worker`：
 
 ```powershell
