@@ -108,12 +108,24 @@ test("Gitee snapshot reads fixed SHA content and marks missing diff coverage", a
     installationId: "gitee:personal",
     repositoryId: repository.id,
     pullRequestNumber: 1,
-    expectedBaseSha: baseSha,
+    expectedBaseSha: "e".repeat(40),
     expectedHeadSha: headSha,
   });
   assert.equal(result?.files[0]?.blobSha, "d".repeat(40));
   assert.deepEqual([...((result?.files[0]?.changedHeadLines as Set<number>) ?? [])], [1]);
   assert.equal(result?.files[1]?.reason, "diff_unavailable");
+  assert.equal(result?.baseSha, baseSha);
+  assert.equal(
+    await fetchGiteeSnapshot(client, repository, {
+      provider: "gitee",
+      installationId: "gitee:personal",
+      repositoryId: repository.id,
+      pullRequestNumber: 1,
+      expectedBaseSha: baseSha,
+      expectedHeadSha: "e".repeat(40),
+    }),
+    null,
+  );
 });
 
 test("Chinese Gitee report is partial and publication reuses its marker", async () => {

@@ -58,10 +58,10 @@ export async function fetchGiteeSnapshot(
   const pr = giteeObject((await client.get(`${prefix}/pulls/${target.pullRequestNumber}`)).data);
   const baseSha = giteeString(giteeObject(pr.base).sha);
   const headSha = giteeString(giteeObject(pr.head).sha);
+  // Gitee's webhook base SHA can differ from the PR API base SHA for the same head.
   if (
     pr.state !== "open" ||
     giteeInteger(pr.number) !== target.pullRequestNumber ||
-    (target.expectedBaseSha && target.expectedBaseSha !== baseSha) ||
     (target.expectedHeadSha && target.expectedHeadSha !== headSha)
   ) {
     return null;
