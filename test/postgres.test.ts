@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
 import { Pool } from "pg";
+import { getQueueStatus } from "../src/adapters/postgres/inspection.js";
 import {
   claimJobs,
   completeJob,
@@ -109,6 +110,13 @@ test("PostgreSQL delivery deduplication, lease fencing and retry", {
     assert.equal(Number(counts.rows[0]?.deliveries), 4);
     assert.equal(Number(counts.rows[0]?.jobs), 4);
     assert.ok(Number(counts.rows[0]?.audits) >= 10);
+
+    const status = await getQueueStatus(pool);
+    assert.deepEqual(status.jobsByState, { completed: 3, failed: 1 });
+    assert.equal(status.recentDeliveries.length, 4);
+    const failedDelivery = status.recentDeliveries.find((row) => row.deliveryId === "delivery-4");
+    assert.equal(failedDelivery?.jobState, "failed");
+    assert.equal(failedDelivery?.lastErrorCode, "attempts_exhausted");
   } finally {
     await pool.end();
   }

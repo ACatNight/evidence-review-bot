@@ -10,6 +10,7 @@
     "build": "tsc -p tsconfig.json",
     "start:api": "npm run build && node dist/src/entrypoints/api.js",
     "db:migrate": "npm run build && node dist/src/entrypoints/migrate.js",
+    "inspect:queue": "npm run build && node dist/src/entrypoints/inspect-queue.js",
     "check": "tsc -p tsconfig.json --noEmit",
     "lint": "biome check src test package.json tsconfig.json biome.json",
     "format": "biome check --write src test package.json tsconfig.json biome.json",

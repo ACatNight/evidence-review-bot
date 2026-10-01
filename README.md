@@ -40,7 +40,7 @@ GitHub、Gitee、GitLab 接入属于平台兼容性。自托管、自选模型�
 
 需要 Node.js 22.22.2 和 npm。执行 `npm ci` 安装锁定依赖，`npm run check` 做类型检查，`npm test` 编译并运行测试。`src/domain/` 包含平台无关契约、覆盖汇总与证据图校验；`src/rules/secret.ts` 包含仅支持明确格式的 Secret 候选检测器。测试位于 `test/`。
 
-`npm run db:migrate` 应用数据库迁移，`npm run start:api` 启动 Webhook 接收 API；数据库测试需按[本地开发说明](docs/local-development.md)提供独立测试库。下一步是只读 PR 快照接入，并把已实现的任务领取用于实际 Worker。
+`npm run db:migrate` 应用数据库迁移，`npm run start:api` 启动 Webhook 接收 API，`npm run inspect:queue` 查看接收后的任务状态；数据库测试和 GitHub App 联调步骤见[本地开发说明](docs/local-development.md)。下一步是只读 PR 快照接入，并把已实现的任务领取用于实际 Worker。
 
 ## 设计原则
 
