@@ -8,11 +8,12 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "start:api": "npm run build && node dist/src/entrypoints/api.js",
     "db:migrate": "npm run build && node dist/src/entrypoints/migrate.js",
     "check": "tsc -p tsconfig.json --noEmit",
     "lint": "biome check src test package.json tsconfig.json biome.json",
     "format": "biome check --write src test package.json tsconfig.json biome.json",
-    "test": "npm run build && node --test dist/test/domain.test.js dist/test/secret.test.js dist/test/postgres.test.js"
+    "test": "npm run build && node --test --test-concurrency=1 dist/test/domain.test.js dist/test/secret.test.js dist/test/postgres.test.js dist/test/webhook.test.js"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.14",
@@ -21,6 +22,7 @@
     "typescript": "5.9.3"
   },
   "dependencies": {
+    "fastify": "5.12.5",
     "pg": "8.23.1"
   }
 }

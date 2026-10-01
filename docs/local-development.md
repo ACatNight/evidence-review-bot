@@ -1,6 +1,6 @@
 # 本地开发与数据库验证
 
-当前服务入口尚未实现。数据库模块已有迁移、Webhook 投递去重、snapshot 任务队列、租约领取/续期、重试和审计记录。它还不接收真实 Webhook，也不生成 PR 快照或发布 Check。
+Webhook API 入口已实现：在原始请求体上校验 GitHub 签名、筛选 PR 事件、持久化投递与 snapshot 任务，并提供 `/healthz`。数据库模块已有迁移、去重、租约领取/续期、重试和审计记录。当前尚未获取 PR 快照、执行 Worker 或发布 Check；真实 GitHub App 的事件与权限仍需验证。
 
 ## 环境
 
@@ -41,6 +41,8 @@ npm test
 Remove-Item Env:PGPASSWORD,Env:DATABASE_URL,Env:TEST_DATABASE_URL
 ```
 
+本地启动 Webhook API 时，先设置 `PGPASSWORD`、`DATABASE_URL` 和长度不少于 32 字符的 `GITHUB_WEBHOOK_SECRET`，再运行 `npm run start:api`。默认只监听 `127.0.0.1:3000`；`GET /healthz` 查询数据库，`POST /webhooks/github` 只接受有效签名的 JSON 请求。不要把真实 webhook 密钥写入仓库。若需要公网回调，使用经过审核的入口和 TLS，并配置 GitHub App 的回调地址与权限。
+
 其他环境可以使用自己的 PostgreSQL 凭据与连接串。`npm test` 在缺少 `TEST_DATABASE_URL` 时跳过数据库集成测试，并在 TAP 输出中标明 SKIP；只有显式提供测试库时才算数据库行为得到验证。迁移按文件名顺序在事务中执行，记录 SHA-256 校验和；已应用 SQL 不允许原地改写，新变更需新增迁移文件。
 
-测试覆盖重复 delivery、冲突 payload、并发领取、过期租约的 fencing、重试与最大次数。真实 GitHub 验证、Worker 进程崩溃恢复和远端 Check 发布仍属于后续任务。
+测试覆盖重复 delivery、冲突 payload、签名拒绝、并发领取、过期租约的 fencing、重试与最大次数。真实 GitHub 验证、Worker 进程崩溃恢复和远端 Check 发布仍属于后续任务。
