@@ -1,3 +1,4 @@
+import { reviewCoverageTable } from "../../application/review-coverage.js";
 import type { ReviewReport } from "../../application/review-pr.js";
 import type { SecretKind } from "../../rules/secret.js";
 import type { PullRequestSnapshot } from "../github/snapshot.js";
@@ -42,6 +43,8 @@ export function giteeReportText(snapshot: PullRequestSnapshot, report: ReviewRep
     "## 代码审查报告",
     "",
     `提交：\`${snapshot.headSha}\``,
+    "",
+    ...reviewCoverageTable(report, "zh"),
     "### 确定性检查",
     "",
     `SEC-001 凭据格式扫描：已检查 ${coverage.completedFiles}/${coverage.changedFiles} 个变更文件；该规则覆盖${coverage.state === "complete" ? "完整" : "部分"}。`,

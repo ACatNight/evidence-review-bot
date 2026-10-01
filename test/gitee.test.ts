@@ -255,6 +255,7 @@ test("Gitee snapshot reads fixed SHA content and marks missing diff coverage", a
 test("Chinese Gitee report is partial and publication reuses its marker", async () => {
   const body = giteeReportText(snapshot, report);
   assert.match(body, /代码审查报告/);
+  assert.match(body, /审查覆盖率/);
   assert.match(body, /未检查范围/);
   assert.match(body, /未运行目标项目的 Lint/);
   assert.match(body, /0 项候选不等于代码安全/);

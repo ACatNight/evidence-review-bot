@@ -5,6 +5,7 @@ import type { GitHubClient } from "../src/adapters/github/client.js";
 import type { PullRequestSnapshot } from "../src/adapters/github/snapshot.js";
 import { AI_NOT_RUN } from "../src/adapters/openai/security-review.js";
 import type { ReviewReport } from "../src/application/review-pr.js";
+import { checkOutput } from "../src/application/review-pr.js";
 
 const snapshot: PullRequestSnapshot = {
   provider: "github",
@@ -36,6 +37,7 @@ const report: ReviewReport = {
 };
 
 test("Check publishing rejects stale PR and reuses an existing check", async () => {
+  assert.match(checkOutput(report, snapshot.headSha).text, /Review Coverage/);
   let writes = 0;
   const stale = {
     get: async () => ({

@@ -4,6 +4,7 @@ import { AI_NOT_RUN, type AiReview } from "../adapters/openai/security-review.js
 import { summarizeCoverage } from "../domain/coverage.js";
 import type { CoverageReason, CoverageState } from "../domain/review.js";
 import { SECRET_RULE_VERSION, type SecretKind, scanSecrets } from "../rules/secret.js";
+import { reviewCoverageTable } from "./review-coverage.js";
 
 export interface ReportFinding {
   readonly path: string;
@@ -135,6 +136,8 @@ export function checkOutput(
     " Neither check proves the PR is safe.";
   const lines = [
     `Commit: \`${headSha}\``,
+    "",
+    ...reviewCoverageTable(report, "en"),
     `Rule: SEC-001 v${report.ruleVersion} (GitHub classic and fine-grained token formats; supported PEM private key formats).`,
     "",
   ];
