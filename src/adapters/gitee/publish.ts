@@ -38,8 +38,10 @@ export function giteeReportText(snapshot: PullRequestSnapshot, report: ReviewRep
     "## 代码审查报告",
     "",
     `提交：\`${snapshot.headSha}\``,
-    `确定性规则 SEC-001：已检查 ${coverage.completedFiles}/${coverage.changedFiles} 个列出的变更文件；覆盖状态：${coverage.state === "complete" ? "完整" : "部分"}。`,
-    `发现 ${findings.length} 个凭据格式候选。仅匹配已支持格式，不验证凭据是否有效。`,
+    "### 确定性检查",
+    "",
+    `SEC-001 凭据格式扫描：已检查 ${coverage.completedFiles}/${coverage.changedFiles} 个变更文件；该规则覆盖${coverage.state === "complete" ? "完整" : "部分"}。`,
+    `候选 ${findings.length} 项。仅识别已支持的凭据格式，不验证凭据有效性，也不代表完成了其他安全检查。`,
     "",
   ];
   if (findings.length > 0) {
@@ -66,11 +68,36 @@ export function giteeReportText(snapshot: PullRequestSnapshot, report: ReviewRep
     partial: "部分完成",
     error: "调用失败",
   }[aiReview.state];
+  const aiCandidateText =
+    aiReview.inspectedFiles === 0
+      ? "候选问题：未评估"
+      : `候选问题 ${aiReview.findings.length} 项${aiReview.state === "partial" ? "（仅已检查部分）" : ""}`;
   lines.push(
     "### AI 安全审查",
     "",
-    `状态：${aiState}；已检查 ${aiReview.inspectedFiles}/${aiReview.eligibleFiles} 个符合条件的文件；候选问题 ${aiReview.findings.length} 项。`,
+    `状态：${aiState}；已检查 ${aiReview.inspectedFiles}/${aiReview.eligibleFiles} 个符合条件的文件；${aiCandidateText}。`,
   );
+  if (aiReview.unreviewedPaths?.length) {
+    lines.push("", "未进入 AI 审查的文件：");
+    for (const path of aiReview.unreviewedPaths.slice(0, 20)) {
+      lines.push(`- \`${display(path)}\``);
+    }
+    if (aiReview.unreviewedPaths.length > 20) {
+      lines.push(`- 另有 ${aiReview.unreviewedPaths.length - 20} 个文件未列出。`);
+    }
+  }
+  const aiFailureText: Record<string, string> = {
+    api_timeout: "AI 服务调用超时",
+    api_rate_limited: "AI 服务限流",
+    api_provider_error: "AI 服务返回服务器错误",
+    api_request_rejected: "AI 服务拒绝审查请求",
+    api_output_limit: "AI 输出达到长度上限",
+    api_response_incomplete: "AI 返回结果不完整",
+    api_unavailable_or_invalid_response: "AI 服务调用失败或返回内容无效",
+  };
+  if (aiReview.reason && aiFailureText[aiReview.reason]) {
+    lines.push(`${aiFailureText[aiReview.reason]}；未完成的文件不能视为通过。`);
+  }
   for (const finding of aiReview.findings) {
     lines.push(
       `- \`${display(finding.path)}:${finding.line}\` [风险：${severityText[finding.severity] ?? finding.severity}；置信度：${severityText[finding.confidence] ?? finding.confidence}] ${display(finding.title)}：${display(finding.evidence, 500)}。建议：${display(finding.recommendation, 500)}`,
@@ -78,7 +105,9 @@ export function giteeReportText(snapshot: PullRequestSnapshot, report: ReviewRep
   }
   lines.push(
     "",
-    "AI 输出仅为待人工核实的候选；没有发现问题不代表代码安全。部分覆盖或调用失败时，未检查范围不能视为通过。",
+    "### 未执行的检查",
+    "",
+    "本报告未运行目标项目的 Lint、编译/类型检查、依赖漏洞扫描或运行时测试。AI 结果仅是待人工核实的候选；0 项候选不等于代码安全。",
     "",
   );
   const key = marker(snapshot);

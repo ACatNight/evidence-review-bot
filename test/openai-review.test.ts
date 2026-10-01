@@ -67,8 +67,9 @@ test("AI findings must point to changed lines and failed calls are not clean rev
   const config = { apiKey: "test-key", model: "test-model", allowedRepositoryIds: new Set(["2"]) };
   const fake = {
     responses: {
-      parse: async (request: { store: boolean; input: unknown }) => {
+      parse: async (request: { store: boolean; input: unknown; max_output_tokens: number }) => {
         assert.equal(request.store, false);
+        assert.equal(request.max_output_tokens, 4_000);
         assert.equal(JSON.stringify(request.input).includes(token), false);
         assert.equal(JSON.stringify(request.input).includes(fineGrainedToken), false);
         return {
@@ -117,6 +118,23 @@ test("AI findings must point to changed lines and failed calls are not clean rev
   const error = await reviewWithOpenAI(snapshot, config, failing);
   assert.equal(error.state, "error");
   assert.equal(error.findings.length, 0);
+  const rateLimited = {
+    responses: {
+      parse: async () => {
+        throw Object.assign(new Error("rate limit"), { status: 429 });
+      },
+    },
+  } as unknown as OpenAI;
+  assert.equal((await reviewWithOpenAI(snapshot, config, rateLimited)).reason, "api_rate_limited");
+  const incomplete = {
+    responses: {
+      parse: async () => ({
+        status: "incomplete",
+        incomplete_details: { reason: "max_output_tokens" },
+      }),
+    },
+  } as unknown as OpenAI;
+  assert.equal((await reviewWithOpenAI(snapshot, config, incomplete)).reason, "api_output_limit");
   assert.equal((await reviewWithOpenAI(snapshot, null)).state, "not_run");
 });
 
@@ -149,4 +167,52 @@ test("AI review reports partial coverage when changed lines exceed the prompt li
     fake,
   );
   assert.equal(result.state, "partial");
+});
+
+test("AI review batches Java changes and validates findings in later batches", async () => {
+  const files = Array.from({ length: 14 }, (_, index) => ({
+    path: `src/File${index}.java`,
+    blobSha: "f".repeat(40),
+    baseText: "",
+    headText: `class File${index} {}`,
+    changedHeadLines: new Set([1]),
+  }));
+  let calls = 0;
+  const fake = {
+    responses: {
+      parse: async (request: { input: unknown }) => {
+        calls++;
+        const prompt = JSON.stringify(request.input);
+        return {
+          status: "completed",
+          output_parsed: {
+            findings: prompt.includes("src/File13.java")
+              ? [
+                  {
+                    path: "src/File13.java",
+                    line: 1,
+                    category: "other",
+                    severity: "medium",
+                    confidence: "medium",
+                    title: "Later batch finding",
+                    evidence: "Changed line",
+                    recommendation: "Review this line",
+                  },
+                ]
+              : [],
+          },
+        };
+      },
+    },
+  } as unknown as OpenAI;
+  const result = await reviewWithOpenAI(
+    { ...snapshot, files },
+    { apiKey: "test-key", model: "test-model", allowedRepositoryIds: new Set(["2"]) },
+    fake,
+  );
+  assert.equal(calls, 2);
+  assert.equal(result.state, "complete");
+  assert.equal(result.inspectedFiles, 14);
+  assert.deepEqual(result.unreviewedPaths, []);
+  assert.equal(result.findings[0]?.path, "src/File13.java");
 });

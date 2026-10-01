@@ -255,7 +255,22 @@ test("Chinese Gitee report is partial and publication reuses its marker", async 
   const body = giteeReportText(snapshot, report);
   assert.match(body, /代码审查报告/);
   assert.match(body, /未检查范围/);
-  assert.match(body, /不代表代码安全/);
+  assert.match(body, /未运行目标项目的 Lint/);
+  assert.match(body, /0 项候选不等于代码安全/);
+  assert.match(
+    giteeReportText(snapshot, {
+      ...report,
+      aiReview: { ...report.aiReview, state: "error" },
+    }),
+    /候选问题：未评估/,
+  );
+  assert.match(
+    giteeReportText(snapshot, {
+      ...report,
+      aiReview: { ...report.aiReview, state: "partial", unreviewedPaths: ["src/Hidden.java"] },
+    }),
+    /未进入 AI 审查的文件：[\s\S]*src\/Hidden.java/,
+  );
   let comment: { id: number; body: string } | null = null;
   let posts = 0;
   let patches = 0;
