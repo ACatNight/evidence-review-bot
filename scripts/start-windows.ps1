@@ -4,6 +4,7 @@ $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $homeDirectory = Get-ReviewBotHome
 $config = Get-ReviewBotConfig
+$giteeRepositories = @(Get-GiteeRepositories $config)
 $runPath = Join-Path $homeDirectory 'local-run.json'
 if (Test-Path -LiteralPath $runPath) {
   $previous = Get-Content -LiteralPath $runPath -Raw | ConvertFrom-Json
@@ -48,12 +49,18 @@ try {
     }
   } finally { $listener.Dispose() }
 
-  Remove-Item Env:OPENAI_API_KEY, Env:OPENAI_MODEL, Env:OPENAI_BASE_URL, Env:OPENAI_ALLOWED_REPOSITORIES, Env:OPENAI_REVIEW_ENABLED, Env:GITHUB_APP_ID, Env:GITHUB_PRIVATE_KEY_PATH, Env:REVIEW_HMAC_KEY, Env:GITEE_API_TOKEN, Env:GITEE_OWNER, Env:GITEE_REPO, Env:GITEE_REPOSITORY_ID, Env:GITEE_WEBHOOK_SECRET -ErrorAction SilentlyContinue
+  Remove-Item Env:OPENAI_API_KEY, Env:OPENAI_MODEL, Env:OPENAI_BASE_URL, Env:OPENAI_ALLOWED_REPOSITORIES, Env:OPENAI_REVIEW_ENABLED, Env:GITHUB_APP_ID, Env:GITHUB_PRIVATE_KEY_PATH, Env:REVIEW_HMAC_KEY, Env:GITEE_REPOSITORIES_JSON, Env:GITEE_WEBHOOKS_JSON -ErrorAction SilentlyContinue
   $env:GITHUB_WEBHOOK_SECRET = Read-ReviewBotSecret $config.githubWebhookSecretFile
-  if ($config.giteeEnabled -and $config.giteeWebhookSecretFile) {
-    $env:GITEE_WEBHOOK_SECRET = Read-ReviewBotSecret $config.giteeWebhookSecretFile
-    $env:GITEE_REPOSITORY_ID = [string] $config.giteeRepositoryId
+  $giteeWebhooks = @()
+  foreach ($repository in $giteeRepositories) {
+    if ($repository.webhookSecretFile) {
+      $giteeWebhooks += @{
+        id = [string] $repository.id
+        secret = Read-ReviewBotSecret $repository.webhookSecretFile
+      }
+    }
   }
+  $env:GITEE_WEBHOOKS_JSON = ConvertTo-Json -InputObject @($giteeWebhooks) -Compress -Depth 4
   $env:PORT = [string] $config.port
   $env:HOST = '127.0.0.1'
   $node = (Get-Command node.exe -ErrorAction Stop).Source
@@ -70,16 +77,20 @@ try {
   if (-not $healthy) { throw 'API health check failed. See api-error.log in the configuration directory.' }
 
   Remove-Item Env:GITHUB_WEBHOOK_SECRET -ErrorAction SilentlyContinue
-  Remove-Item Env:GITEE_WEBHOOK_SECRET -ErrorAction SilentlyContinue
+  Remove-Item Env:GITEE_WEBHOOKS_JSON -ErrorAction SilentlyContinue
   $env:GITHUB_APP_ID = [string] $config.githubAppId
   $env:GITHUB_PRIVATE_KEY_PATH = $config.githubPrivateKeyPath
   $env:REVIEW_HMAC_KEY = Read-ReviewBotSecret $config.reviewHmacKeyFile
-  if ($config.giteeEnabled) {
-    $env:GITEE_API_TOKEN = Read-ReviewBotSecret $config.giteeTokenFile
-    $env:GITEE_OWNER = $config.giteeOwner
-    $env:GITEE_REPO = $config.giteeRepo
-    $env:GITEE_REPOSITORY_ID = [string] $config.giteeRepositoryId
+  $giteeWorkers = @()
+  foreach ($repository in $giteeRepositories) {
+    $giteeWorkers += @{
+      id = [string] $repository.id
+      owner = [string] $repository.owner
+      name = [string] $repository.name
+      token = Read-ReviewBotSecret $repository.tokenFile
+    }
   }
+  $env:GITEE_REPOSITORIES_JSON = ConvertTo-Json -InputObject @($giteeWorkers) -Compress -Depth 4
   $env:OPENAI_REVIEW_ENABLED = if ($config.aiEnabled) { 'true' } else { 'false' }
   if ($config.aiEnabled) {
     $env:OPENAI_API_KEY = Read-ReviewBotSecret $config.aiKeyFile
@@ -124,12 +135,12 @@ try {
   Write-Output "API and worker started. Health: http://127.0.0.1:$($config.port)/healthz"
   if ($config.publicWebhookUrl) { Write-Output "GitHub App Webhook URL: $($config.publicWebhookUrl)" }
   else { Write-Output 'Set an HTTPS public URL ending in /webhooks/github in the GitHub App.' }
-  if ($config.ngrokEnabled -and $config.giteeEnabled) { Write-Output "Gitee Webhook URL: https://$($config.ngrokDomain)/webhooks/gitee" }
+  if ($config.ngrokEnabled -and $giteeRepositories.Count -gt 0) { Write-Output "Gitee Webhook URL: https://$($config.ngrokDomain)/webhooks/gitee" }
 } catch {
   if ($tunnel -and -not $tunnel.HasExited) { Stop-Process -Id $tunnel.Id -ErrorAction SilentlyContinue }
   if ($worker -and -not $worker.HasExited) { Stop-Process -Id $worker.Id -ErrorAction SilentlyContinue }
   if ($api -and -not $api.HasExited) { Stop-Process -Id $api.Id -ErrorAction SilentlyContinue }
   throw
 } finally {
-  Remove-Item Env:PGPASSWORD, Env:DATABASE_URL, Env:GITHUB_APP_ID, Env:GITHUB_PRIVATE_KEY_PATH, Env:GITHUB_WEBHOOK_SECRET, Env:REVIEW_HMAC_KEY, Env:OPENAI_API_KEY, Env:OPENAI_MODEL, Env:OPENAI_BASE_URL, Env:OPENAI_ALLOWED_REPOSITORIES, Env:OPENAI_REVIEW_ENABLED, Env:GITEE_API_TOKEN, Env:GITEE_OWNER, Env:GITEE_REPO, Env:GITEE_REPOSITORY_ID, Env:GITEE_WEBHOOK_SECRET, Env:NGROK_AUTHTOKEN -ErrorAction SilentlyContinue
+  Remove-Item Env:PGPASSWORD, Env:DATABASE_URL, Env:GITHUB_APP_ID, Env:GITHUB_PRIVATE_KEY_PATH, Env:GITHUB_WEBHOOK_SECRET, Env:REVIEW_HMAC_KEY, Env:OPENAI_API_KEY, Env:OPENAI_MODEL, Env:OPENAI_BASE_URL, Env:OPENAI_ALLOWED_REPOSITORIES, Env:OPENAI_REVIEW_ENABLED, Env:GITEE_REPOSITORIES_JSON, Env:GITEE_WEBHOOKS_JSON, Env:NGROK_AUTHTOKEN -ErrorAction SilentlyContinue
 }

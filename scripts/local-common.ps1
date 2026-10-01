@@ -14,6 +14,22 @@ function Get-ReviewBotConfig {
   return (Get-Content -LiteralPath $path -Raw | ConvertFrom-Json)
 }
 
+function Get-GiteeRepositories($config) {
+  $repositories = @()
+  if (-not $config.giteeEnabled) { return $repositories }
+  $repositories += [pscustomobject]@{
+    owner = $config.giteeOwner
+    name = $config.giteeRepo
+    id = [string] $config.giteeRepositoryId
+    tokenFile = $config.giteeTokenFile
+    webhookSecretFile = $config.giteeWebhookSecretFile
+  }
+  foreach ($repository in @($config.giteeAdditionalRepositories)) {
+    if ($repository) { $repositories += $repository }
+  }
+  return $repositories
+}
+
 function Read-ReviewBotSecret([string] $path) {
   if (-not $path -or -not (Test-Path -LiteralPath $path -PathType Leaf)) {
     throw "Secret file not found: $path"

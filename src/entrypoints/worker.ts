@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { setTimeout as delay } from "node:timers/promises";
 import { Pool } from "pg";
 import { GiteeClient } from "../adapters/gitee/client.js";
+import { parseGiteeWorkerRepositories } from "../adapters/gitee/config.js";
 import { GitHubClient } from "../adapters/github/client.js";
 import type { AiReviewConfig } from "../adapters/openai/security-review.js";
 import { type GiteeWorkerConfig, runOneJob } from "../application/worker.js";
@@ -21,15 +22,12 @@ if (!/^\d+$/.test(appId) || !/^[a-f0-9]{64,}$/i.test(hmacHex) || hmacHex.length 
 
 const privateKey = await readFile(privateKeyPath, "utf8");
 const client = new GitHubClient(appId, privateKey);
-let gitee: GiteeWorkerConfig | null = null;
-if (process.env.GITEE_API_TOKEN) {
-  const owner = process.env.GITEE_OWNER;
-  const name = process.env.GITEE_REPO;
-  const id = process.env.GITEE_REPOSITORY_ID;
-  if (!owner || !name || !id || !/^\d+$/.test(id)) {
-    throw new Error("GITEE_OWNER, GITEE_REPO and GITEE_REPOSITORY_ID are required");
-  }
-  gitee = { client: new GiteeClient(process.env.GITEE_API_TOKEN), repository: { owner, name, id } };
+const gitee = new Map<string, GiteeWorkerConfig>();
+for (const repository of parseGiteeWorkerRepositories(process.env.GITEE_REPOSITORIES_JSON)) {
+  gitee.set(repository.id, {
+    client: new GiteeClient(repository.token),
+    repository: { owner: repository.owner, name: repository.name, id: repository.id },
+  });
 }
 let aiConfig: AiReviewConfig | null = null;
 if (process.env.OPENAI_REVIEW_ENABLED === "true") {

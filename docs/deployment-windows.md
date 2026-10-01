@@ -1,6 +1,6 @@
 # Windows 快速部署
 
-当前启动器适用于本机 GitHub App 与 Gitee 单仓库试点。首次填写配置，之后一条命令构建、迁移并启动 Webhook API 和 Worker；配置 ngrok 固定域名后也会启动受管隧道并检查公网健康状态。它不会创建 GitHub App、ngrok 账号或 PostgreSQL。Gitee 设置见[测试仓库接入](gitee-setup.md)。
+当前启动器适用于本机 GitHub App 与已配置的 Gitee 仓库试点。首次填写配置，之后一条命令构建、迁移并启动 Webhook API 和 Worker；配置 ngrok 固定域名后也会启动受管隧道并检查公网健康状态。它不会创建 GitHub App、ngrok 账号或 PostgreSQL。Gitee 设置见[测试仓库接入](gitee-setup.md)。
 
 ## 准备资料
 
@@ -62,6 +62,6 @@ $secure | ConvertFrom-SecureString | Set-Content -LiteralPath 'D:\Tools\evidence
 
 然后在向导中填写密钥文件、模型、HTTPS API 根地址及允许传输代码的数字仓库 ID。仅白名单仓库会向该接口发送脱敏后的变更代码；确认服务商可接收这些代码后再开启。
 
-`github` 与 `gitee` 是分别推送到 GitHub 和 Gitee 的长期发布分支；开发改动先进入 `dev`，验证后再同步到两个分支。Gitee 单仓库适配启用后可接收 Gitee PR Webhook，并在 PR 评论中发布中文报告；它不提供 GitHub Check 或 Gitee 平台原生状态门禁。
+`github` 与 `gitee` 是分别推送到 GitHub 和 Gitee 的长期发布分支；开发改动先进入 `dev`，验证后再同步到两个分支。Gitee 仓库适配启用后可接收 Gitee PR Webhook，并在 PR 评论中发布中文报告；它不提供 GitHub Check 或 Gitee 平台原生状态门禁。
 
 发布时在 `dev` 完成测试与 PR 验证，再将同一提交快进到本地 `github` 和 `gitee`，分别推送到 GitHub 的 `github` 分支与 Gitee 的 `gitee` 分支。两边的分支不直接开发，也不强制推送。GitHub 对 `github` 分支运行现有质量工作流；Gitee 暂未配置对应的远端 CI，推送前需先通过本地检查。对外发布前应分别在两平台启用分支保护，限制直接推送与强制推送。

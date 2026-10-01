@@ -3,6 +3,10 @@ import { createHmac } from "node:crypto";
 import test from "node:test";
 import { Pool } from "pg";
 import { GiteeClient } from "../src/adapters/gitee/client.js";
+import {
+  parseGiteeWebhookRepositories,
+  parseGiteeWorkerRepositories,
+} from "../src/adapters/gitee/config.js";
 import { giteeReportText, publishGiteeReport } from "../src/adapters/gitee/publish.js";
 import { fetchGiteeSnapshot } from "../src/adapters/gitee/snapshot.js";
 import { parseGiteeWebhook, verifyGiteeWebhook } from "../src/adapters/gitee/webhook.js";
@@ -24,7 +28,7 @@ const pr = {
 };
 
 const snapshot: PullRequestSnapshot = {
-  installationId: "gitee:personal",
+  installationId: `gitee:${repository.id}`,
   repositoryId: repository.id,
   repositoryOwner: repository.owner,
   repositoryName: repository.name,
@@ -72,9 +76,63 @@ test("Gitee Webhook checks timestamped signature and repository identity", () =>
   );
   const parsed = parseGiteeWebhook(body, "Merge Request Hook", repository.id);
   assert.equal(parsed.kind, "review");
-  if (parsed.kind === "review") assert.equal(parsed.delivery.provider, "gitee");
+  if (parsed.kind === "review") {
+    assert.equal(parsed.delivery.provider, "gitee");
+    assert.equal(parsed.delivery.installationId, `gitee:${repository.id}`);
+  }
   assert.equal(parseGiteeWebhook(body, "Merge Request Hook", "9").kind, "invalid");
   assert.equal(parseGiteeWebhook(body, "Push Hook", repository.id).kind, "ignored");
+});
+
+test("Gitee repository configuration rejects duplicate IDs", () => {
+  const first = {
+    id: repository.id,
+    owner: repository.owner,
+    name: repository.name,
+    token: "test",
+  };
+  assert.equal(parseGiteeWorkerRepositories(JSON.stringify([first])).length, 1);
+  assert.throws(() => parseGiteeWorkerRepositories(JSON.stringify([first, first])));
+  assert.throws(() =>
+    parseGiteeWebhookRepositories(JSON.stringify([{ id: repository.id, secret: "short" }])),
+  );
+});
+
+test("a valid signature from another configured Gitee repository cannot queue this PR", async () => {
+  const otherId = "49998972";
+  const secret = "s".repeat(32);
+  const otherSecret = "t".repeat(32);
+  const timestamp = String(Date.now());
+  const body = Buffer.from(
+    JSON.stringify({
+      hook_name: "merge_request_hooks",
+      repository: { id: Number(repository.id) },
+      pull_request: pr,
+    }),
+  );
+  const signature = encodeURIComponent(
+    createHmac("sha256", otherSecret).update(`${timestamp}\n${otherSecret}`).digest("base64"),
+  );
+  const app = createWebhookServer({} as Pool, "github-secret-at-least-32-characters", [
+    { secret, repositoryId: repository.id },
+    { secret: otherSecret, repositoryId: otherId },
+  ]);
+  try {
+    const response = await app.inject({
+      method: "POST",
+      url: "/webhooks/gitee",
+      headers: {
+        "content-type": "application/json",
+        "x-gitee-event": "Merge Request Hook",
+        "x-gitee-timestamp": timestamp,
+        "x-gitee-token": signature,
+      },
+      payload: body,
+    });
+    assert.equal(response.statusCode, 400);
+  } finally {
+    await app.close();
+  }
 });
 
 test("Gitee snapshot reads fixed SHA content and marks missing diff coverage", async () => {
@@ -105,7 +163,7 @@ test("Gitee snapshot reads fixed SHA content and marks missing diff coverage", a
   const client = new GiteeClient("test-token", transport as typeof fetch);
   const result = await fetchGiteeSnapshot(client, repository, {
     provider: "gitee",
-    installationId: "gitee:personal",
+    installationId: `gitee:${repository.id}`,
     repositoryId: repository.id,
     pullRequestNumber: 1,
     expectedBaseSha: "e".repeat(40),
@@ -118,7 +176,7 @@ test("Gitee snapshot reads fixed SHA content and marks missing diff coverage", a
   assert.equal(
     await fetchGiteeSnapshot(client, repository, {
       provider: "gitee",
-      installationId: "gitee:personal",
+      installationId: `gitee:${repository.id}`,
       repositoryId: repository.id,
       pullRequestNumber: 1,
       expectedBaseSha: baseSha,
@@ -181,10 +239,9 @@ test("Gitee Webhook route rejects invalid signatures and deduplicates events", {
   if (!connectionString) return;
   const pool = new Pool({ connectionString });
   const secret = "g".repeat(32);
-  const app = createWebhookServer(pool, "github-secret-at-least-32-characters", {
-    secret,
-    repositoryId: repository.id,
-  });
+  const app = createWebhookServer(pool, "github-secret-at-least-32-characters", [
+    { secret, repositoryId: repository.id },
+  ]);
   try {
     const database = await pool.query<{ current_database: string }>("SELECT current_database()");
     assert.equal(database.rows[0]?.current_database, "evidence_review_bot_test");

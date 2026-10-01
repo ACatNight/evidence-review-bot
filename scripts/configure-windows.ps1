@@ -163,6 +163,7 @@ $config = [ordered]@{
   giteeRepo = $giteeRepo
   giteeRepositoryId = $giteeRepositoryId
   giteeWebhookSecretFile = $giteeWebhookSecretFile
+  giteeAdditionalRepositories = @($prior.giteeAdditionalRepositories | Where-Object { $_ })
   aiEnabled = $aiEnabled
   aiKeyFile = $aiKeyFile
   aiModel = $aiModel

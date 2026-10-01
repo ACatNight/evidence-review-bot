@@ -68,7 +68,7 @@ export function parseGiteeWebhook(
     kind: "review",
     delivery: {
       provider: "gitee",
-      installationId: "gitee:personal",
+      installationId: `gitee:${repositoryId}`,
       deliveryId: digest,
       eventType: "merge_request_hooks",
       repositoryId,

@@ -2,7 +2,7 @@
 
 开放、平台无关的 PR Review Engine，以确定性检查和可验证证据支持审查决策。
 
-**当前状态：GitHub Webhook、固定 SHA 的 PR 快照、SEC-001 候选扫描和 Check 汇总已接通；Gitee 单仓库适配提供 Webhook、固定 SHA 快照和中文 PR 评论报告。可选 OpenAI 安全审查默认关闭；GitHub PR 工作流另跑 Lint、类型检查、测试、npm 依赖审计和 CodeQL。反馈、抑制、回放和完整审计仍未实现；当前只适合测试仓库联调。**
+**当前状态：GitHub Webhook、固定 SHA 的 PR 快照、SEC-001 候选扫描和 Check 汇总已接通；Gitee 已配置仓库可接收 Webhook、读取固定 SHA 快照并发布中文 PR 评论报告。可选 OpenAI 安全审查默认关闭；GitHub PR 工作流另跑 Lint、类型检查、测试、npm 依赖审计和 CodeQL。反馈、抑制、回放和完整审计仍未实现；当前只适合测试仓库联调。**
 
 项目希望减少没有依据的审查评论：先使用可验证的规则发现问题，再按需获取上下文和调用模型，并把每项结论绑定到具体代码快照、规则版本和证据来源。
 

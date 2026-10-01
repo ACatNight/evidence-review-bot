@@ -7,7 +7,7 @@ import { enqueueSnapshot } from "../adapters/postgres/jobs.js";
 export function createWebhookServer(
   pool: Pool,
   secret: string,
-  gitee?: { readonly secret: string; readonly repositoryId: string },
+  gitee: readonly { readonly secret: string; readonly repositoryId: string }[] = [],
 ) {
   if (secret.length < 32) throw new Error("GITHUB_WEBHOOK_SECRET must be at least 32 characters");
   const app = Fastify({ bodyLimit: 1_048_576, logger: false });
@@ -64,8 +64,11 @@ export function createWebhookServer(
     }
   });
 
-  if (gitee) {
-    if (gitee.secret.length < 32 || !/^\d+$/.test(gitee.repositoryId)) {
+  if (gitee.length > 0) {
+    if (
+      gitee.some((entry) => entry.secret.length < 32 || !/^\d+$/.test(entry.repositoryId)) ||
+      new Set(gitee.map((entry) => entry.repositoryId)).size !== gitee.length
+    ) {
       throw new Error("Invalid Gitee Webhook configuration");
     }
     app.post("/webhooks/gitee", async (request, reply) => {
@@ -74,20 +77,21 @@ export function createWebhookServer(
         return reply.code(415).send({ error: "unsupported_content_type" });
       const token = request.headers["x-gitee-token"];
       const timestamp = request.headers["x-gitee-timestamp"];
-      if (
-        !verifyGiteeWebhook(
+      const verified = gitee.find((entry) =>
+        verifyGiteeWebhook(
           typeof token === "string" ? token : undefined,
           typeof timestamp === "string" ? timestamp : undefined,
-          gitee.secret,
-        )
-      ) {
+          entry.secret,
+        ),
+      );
+      if (!verified) {
         return reply.code(401).send({ error: "invalid_signature" });
       }
       const event = request.headers["x-gitee-event"];
       const parsed = parseGiteeWebhook(
         body,
         typeof event === "string" ? event : undefined,
-        gitee.repositoryId,
+        verified.repositoryId,
       );
       if (parsed.kind === "invalid") return reply.code(400).send({ error: "invalid_event" });
       if (parsed.kind === "ignored") return reply.code(202).send({ queued: false });

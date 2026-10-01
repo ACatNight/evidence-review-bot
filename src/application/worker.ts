@@ -42,7 +42,7 @@ async function processJob(
   client: GitHubClient,
   masterHmacKey: Buffer,
   aiConfig: AiReviewConfig | null,
-  gitee: GiteeWorkerConfig | null,
+  gitee: ReadonlyMap<string, GiteeWorkerConfig>,
   job: ClaimedJob,
   workerId: string,
 ): Promise<void> {
@@ -59,10 +59,12 @@ async function processJob(
   try {
     if (job.kind !== "snapshot") throw new Error("Unsupported job kind");
     const target = await snapshotTarget(pool, job);
-    if (target.provider === "gitee" && !gitee) throw new Error("Gitee worker is not configured");
+    const giteeConfig = gitee.get(target.repositoryId);
+    if (target.provider === "gitee" && !giteeConfig)
+      throw new Error("Gitee worker is not configured for this repository");
     const snapshot =
-      target.provider === "gitee" && gitee
-        ? await fetchGiteeSnapshot(gitee.client, gitee.repository, target)
+      target.provider === "gitee" && giteeConfig
+        ? await fetchGiteeSnapshot(giteeConfig.client, giteeConfig.repository, target)
         : await fetchSnapshot(client, target);
     if (leaseLost) return;
     if (!snapshot) {
@@ -99,10 +101,10 @@ async function processJob(
     if (leaseLost) return;
     try {
       const checkId =
-        target.provider === "gitee" && gitee
+        target.provider === "gitee" && giteeConfig
           ? await publishGiteeReport(
-              gitee.client,
-              gitee.repository,
+              giteeConfig.client,
+              giteeConfig.repository,
               snapshot,
               stored.report,
               allowCreate,
@@ -137,7 +139,7 @@ export async function runOneJob(
   client: GitHubClient,
   masterHmacKey: Buffer,
   aiConfig: AiReviewConfig | null = null,
-  gitee: GiteeWorkerConfig | null = null,
+  gitee: ReadonlyMap<string, GiteeWorkerConfig> = new Map(),
   workerId = randomUUID(),
 ): Promise<boolean> {
   const jobs = await claimJobs(pool, workerId, 1, LEASE_MS);
