@@ -1,14 +1,23 @@
 import type { EvidenceNode, Finding } from "./review.js";
 
-export function validateEvidence(nodes: readonly EvidenceNode[], findings: readonly Finding[]): void {
+export function validateEvidence(
+  nodes: readonly EvidenceNode[],
+  findings: readonly Finding[],
+): void {
   const byId = new Map<string, EvidenceNode>();
   for (const node of nodes) {
     if (!node.id || byId.has(node.id)) throw new Error("Evidence IDs must be unique and nonempty");
     byId.set(node.id, node);
     if (node.kind === "observed") {
       const source = node.source;
-      if (!source.snapshotSha || !source.blobSha || !source.path || !source.contentDigest ||
-          source.startLine < 1 || source.endLine < source.startLine) {
+      if (
+        !source.snapshotSha ||
+        !source.blobSha ||
+        !source.path ||
+        !source.contentDigest ||
+        source.startLine < 1 ||
+        source.endLine < source.startLine
+      ) {
         throw new Error(`Observed evidence ${node.id} has no verifiable source`);
       }
     } else {
@@ -44,7 +53,8 @@ export function validateEvidence(nodes: readonly EvidenceNode[], findings: reado
   // Validate every node, including unattached nodes that might be persisted later.
   for (const id of byId.keys()) hasObserved(id);
   for (const finding of findings) {
-    if (finding.evidenceRootIds.length === 0) throw new Error(`Finding ${finding.id} has no evidence`);
+    if (finding.evidenceRootIds.length === 0)
+      throw new Error(`Finding ${finding.id} has no evidence`);
     if (!finding.evidenceRootIds.some(hasObserved)) {
       throw new Error(`Finding ${finding.id} has no observed evidence`);
     }

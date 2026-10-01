@@ -9,9 +9,12 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "check": "tsc -p tsconfig.json --noEmit",
-    "test": "npm run build && node --test dist/test/domain.test.js"
+    "lint": "biome check src test package.json tsconfig.json biome.json",
+    "format": "biome check --write src test package.json tsconfig.json biome.json",
+    "test": "npm run build && node --test dist/test/domain.test.js dist/test/secret.test.js"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.14",
     "@types/node": "22.18.6",
     "typescript": "5.9.3"
   }

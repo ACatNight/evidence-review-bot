@@ -30,10 +30,15 @@ export function summarizeCoverage(
       if (record.reason !== undefined) throw new Error("Complete coverage cannot have a reason");
       complete++;
     } else if (record.state === "excluded") {
-      if (record.reason !== "unsupported") throw new Error("Excluded scope needs an unsupported reason");
+      if (record.reason !== "unsupported")
+        throw new Error("Excluded scope needs an unsupported reason");
       excluded++;
     } else {
-      if (record.reason === undefined || record.reason === "unsupported" || record.reason === "rule_disabled") {
+      if (
+        record.reason === undefined ||
+        record.reason === "unsupported" ||
+        record.reason === "rule_disabled"
+      ) {
         throw new Error("Incomplete coverage needs a failure reason");
       }
       incomplete++;
@@ -42,9 +47,8 @@ export function summarizeCoverage(
 
   incomplete += expected - seen.size;
   const applicable = expected - excluded;
-  const state = expected === 0 || applicable === 0
-    ? "not_run"
-    : incomplete > 0 ? "partial" : "complete";
+  const state =
+    expected === 0 || applicable === 0 ? "not_run" : incomplete > 0 ? "partial" : "complete";
 
   return {
     state,
