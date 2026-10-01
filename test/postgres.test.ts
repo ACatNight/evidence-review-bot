@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
 import { Pool } from "pg";
+import { getQueueStatus } from "../src/adapters/postgres/inspection.js";
 import {
   claimJobs,
   completeJob,
@@ -24,7 +25,7 @@ test("PostgreSQL delivery deduplication, lease fencing and retry", {
     await migrate(pool);
     await migrate(pool);
     await pool.query(
-      "TRUNCATE review_bot.audit_event, review_bot.review_job, review_bot.webhook_delivery RESTART IDENTITY",
+      "TRUNCATE review_bot.review_report, review_bot.audit_event, review_bot.review_job, review_bot.webhook_delivery RESTART IDENTITY",
     );
 
     const event = {
@@ -34,6 +35,8 @@ test("PostgreSQL delivery deduplication, lease fencing and retry", {
       eventType: "pull_request",
       repositoryId: "repo-1",
       pullRequestId: "42",
+      baseSha: "a".repeat(40),
+      headSha: "b".repeat(40),
       payloadDigest: "sha256:sample",
     };
     assert.equal(await enqueueSnapshot(pool, event), true);
@@ -109,6 +112,14 @@ test("PostgreSQL delivery deduplication, lease fencing and retry", {
     assert.equal(Number(counts.rows[0]?.deliveries), 4);
     assert.equal(Number(counts.rows[0]?.jobs), 4);
     assert.ok(Number(counts.rows[0]?.audits) >= 10);
+
+    const status = await getQueueStatus(pool);
+    assert.deepEqual(status.jobsByState, { completed: 3, failed: 1 });
+    assert.equal(status.recentDeliveries.length, 4);
+    const failedDelivery = status.recentDeliveries.find((row) => row.deliveryId === "delivery-4");
+    assert.equal(failedDelivery?.jobState, "failed");
+    assert.equal(failedDelivery?.lastErrorCode, "attempts_exhausted");
+    assert.equal(failedDelivery?.publicationState, null);
   } finally {
     await pool.end();
   }
