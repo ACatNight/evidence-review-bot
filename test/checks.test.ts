@@ -3,6 +3,7 @@ import test from "node:test";
 import { publishCheck } from "../src/adapters/github/checks.js";
 import type { GitHubClient } from "../src/adapters/github/client.js";
 import type { PullRequestSnapshot } from "../src/adapters/github/snapshot.js";
+import { AI_NOT_RUN } from "../src/adapters/openai/security-review.js";
 import type { ReviewReport } from "../src/application/review-pr.js";
 
 const snapshot: PullRequestSnapshot = {
@@ -30,6 +31,7 @@ const report: ReviewReport = {
     gaps: [],
   },
   findings: [],
+  aiReview: AI_NOT_RUN,
 };
 
 test("Check publishing rejects stale PR and reuses an existing check", async () => {

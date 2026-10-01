@@ -3,6 +3,7 @@ import type { Pool } from "pg";
 import { publishCheck } from "../adapters/github/checks.js";
 import { GitHubApiError, type GitHubClient } from "../adapters/github/client.js";
 import { fetchSnapshot } from "../adapters/github/snapshot.js";
+import { type AiReviewConfig, reviewWithOpenAI } from "../adapters/openai/security-review.js";
 import {
   type ClaimedJob,
   claimJobs,
@@ -31,6 +32,7 @@ async function processJob(
   pool: Pool,
   client: GitHubClient,
   masterHmacKey: Buffer,
+  aiConfig: AiReviewConfig | null,
   job: ClaimedJob,
   workerId: string,
 ): Promise<void> {
@@ -55,7 +57,9 @@ async function processJob(
     }
     let stored = await getReport(pool, job.id);
     if (!stored) {
-      const report = reviewSnapshot(snapshot, masterHmacKey);
+      const deterministic = reviewSnapshot(snapshot, masterHmacKey);
+      const aiReview = await reviewWithOpenAI(snapshot, aiConfig);
+      const report = { ...deterministic, aiReview };
       if (!(await saveReport(pool, job, workerId, snapshot, report))) {
         stored = await getReport(pool, job.id);
         if (!stored) return;
@@ -106,12 +110,13 @@ export async function runOneJob(
   pool: Pool,
   client: GitHubClient,
   masterHmacKey: Buffer,
+  aiConfig: AiReviewConfig | null = null,
   workerId = randomUUID(),
 ): Promise<boolean> {
   const jobs = await claimJobs(pool, workerId, 1, LEASE_MS);
   const job = jobs[0];
   if (!job) return false;
-  await processJob(pool, client, masterHmacKey, job, workerId);
+  await processJob(pool, client, masterHmacKey, aiConfig, job, workerId);
   const result = await pool.query<{ state: string; last_error_code: string | null }>(
     "SELECT state, last_error_code FROM review_bot.review_job WHERE id = $1",
     [job.id],

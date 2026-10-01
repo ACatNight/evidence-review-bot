@@ -48,8 +48,8 @@ export async function saveReport(
   const result = await pool.query(
     `INSERT INTO review_bot.review_report
        (job_id, installation_id, repository_id, pull_request_id, merge_base_sha,
-        base_sha, head_sha, rule_version, coverage, findings)
-     SELECT job.id, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12::jsonb
+        base_sha, head_sha, rule_version, coverage, findings, ai_review)
+     SELECT job.id, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12::jsonb, $13::jsonb
      FROM review_bot.review_job AS job
      WHERE job.id = $1 AND job.lease_owner = $2 AND job.lease_generation = $3
        AND job.state = 'running' AND job.lease_until > clock_timestamp()
@@ -67,6 +67,7 @@ export async function saveReport(
       report.ruleVersion,
       JSON.stringify(report.coverage),
       JSON.stringify(report.findings),
+      JSON.stringify(report.aiReview),
     ],
   );
   return result.rowCount === 1;
@@ -77,17 +78,23 @@ export async function getReport(pool: Pool, jobId: string): Promise<StoredReport
     rule_version: string;
     coverage: ReviewReport["coverage"];
     findings: ReviewReport["findings"];
+    ai_review: ReviewReport["aiReview"];
     publication_state: PublicationState;
     check_run_id: string | null;
   }>(
-    `SELECT rule_version, coverage, findings, publication_state, check_run_id
+    `SELECT rule_version, coverage, findings, ai_review, publication_state, check_run_id
      FROM review_bot.review_report WHERE job_id = $1`,
     [jobId],
   );
   const row = result.rows[0];
   if (!row) return null;
   return {
-    report: { ruleVersion: row.rule_version, coverage: row.coverage, findings: row.findings },
+    report: {
+      ruleVersion: row.rule_version,
+      coverage: row.coverage,
+      findings: row.findings,
+      aiReview: row.ai_review,
+    },
     state: row.publication_state,
     checkRunId: row.check_run_id,
   };

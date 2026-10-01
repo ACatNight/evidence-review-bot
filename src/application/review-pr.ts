@@ -1,5 +1,6 @@
 import { createHmac } from "node:crypto";
 import type { PullRequestSnapshot } from "../adapters/github/snapshot.js";
+import { AI_NOT_RUN, type AiReview } from "../adapters/openai/security-review.js";
 import { summarizeCoverage } from "../domain/coverage.js";
 import type { CoverageReason, CoverageState } from "../domain/review.js";
 import { SECRET_RULE_VERSION, type SecretKind, scanSecrets } from "../rules/secret.js";
@@ -27,6 +28,7 @@ export interface ReviewReport {
   readonly ruleVersion: string;
   readonly coverage: ReportCoverage;
   readonly findings: readonly ReportFinding[];
+  readonly aiReview: AiReview;
 }
 
 export function reviewSnapshot(snapshot: PullRequestSnapshot, masterHmacKey: Buffer): ReviewReport {
@@ -101,6 +103,7 @@ export function reviewSnapshot(snapshot: PullRequestSnapshot, masterHmacKey: Buf
       gaps,
     },
     findings,
+    aiReview: AI_NOT_RUN,
   };
 }
 
@@ -116,16 +119,20 @@ export function checkOutput(
   summary: string;
   text: string;
 } {
-  const { coverage, findings } = report;
+  const { coverage, findings, aiReview } = report;
   const title =
-    findings.length > 0
-      ? `SEC-001: ${findings.length} credential-format candidate${findings.length === 1 ? "" : "s"}`
+    findings.length > 0 || aiReview.findings.length > 0
+      ? `Review: ${findings.length} rule, ${aiReview.findings.length} AI candidate(s)`
       : coverage.state === "complete"
         ? "SEC-001: no candidates in checked files"
         : "SEC-001: review incomplete";
   const summary =
     `Coverage: ${coverage.state}; ${coverage.completedFiles}/${coverage.changedFiles} listed changed files checked${coverage.truncatedFiles ? " (more files were omitted)" : ""}. ` +
-    `${findings.length} candidate(s). This checks listed credential formats only; it does not verify validity or prove the PR is safe.`;
+    `${findings.length} SEC-001 candidate(s). AI review: ${aiReview.state}` +
+    (aiReview.state === "complete" || aiReview.state === "partial"
+      ? `, ${aiReview.findings.length} suggestion(s) from ${aiReview.inspectedFiles}/${aiReview.eligibleFiles} eligible files.`
+      : ".") +
+    " Neither check proves the PR is safe.";
   const lines = [
     `Commit: \`${headSha}\``,
     `Rule: SEC-001 v${report.ruleVersion} (GitHub classic token and supported PEM private key formats).`,
@@ -155,6 +162,18 @@ export function checkOutput(
       lines.push(`- ${coverage.gaps.length - 20} additional gaps omitted.`);
     if (coverage.truncatedFiles)
       lines.push("- File list exceeded the first 50 files; remaining files were not checked.");
+  }
+  lines.push("", "## AI security review", "");
+  lines.push(
+    `State: ${aiReview.state}${aiReview.model ? `; model: ${displayPath(aiReview.model)}` : ""}${aiReview.reason ? `; reason: ${aiReview.reason}` : ""}.`,
+  );
+  for (const finding of aiReview.findings) {
+    lines.push(
+      `- ${displayPath(finding.path)}:${finding.line} [${finding.severity}, ${finding.confidence} confidence] ${finding.title}: ${finding.evidence} Suggested action: ${finding.recommendation}`,
+    );
+  }
+  if (aiReview.findings.length > 0) {
+    lines.push("AI suggestions require human verification; they are not deterministic findings.");
   }
   return { title, summary, text: lines.join("\n").slice(0, 60_000) };
 }
