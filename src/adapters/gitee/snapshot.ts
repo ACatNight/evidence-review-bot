@@ -120,6 +120,7 @@ export async function fetchGiteeSnapshot(
     }
   }
   return {
+    provider: "gitee",
     installationId: target.installationId,
     repositoryId: repository.id,
     repositoryOwner: repository.owner,

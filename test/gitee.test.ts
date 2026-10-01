@@ -32,6 +32,7 @@ const pr = {
 };
 
 const snapshot: PullRequestSnapshot = {
+  provider: "gitee",
   installationId: `gitee:${repository.id}`,
   repositoryId: repository.id,
   repositoryOwner: repository.owner,
@@ -267,9 +268,14 @@ test("Chinese Gitee report is partial and publication reuses its marker", async 
   assert.match(
     giteeReportText(snapshot, {
       ...report,
-      aiReview: { ...report.aiReview, state: "partial", unreviewedPaths: ["src/Hidden.java"] },
+      aiReview: {
+        ...report.aiReview,
+        state: "partial",
+        unreviewedPaths: ["src/Hidden.java"],
+        unreviewedRanges: [{ path: "src/Hidden.java", startLine: 5, endLine: 9 }],
+      },
     }),
-    /未进入 AI 审查的文件：[\s\S]*src\/Hidden.java/,
+    /尚未完成 AI 审查的变更行：[\s\S]*src\/Hidden.java:5-9/,
   );
   assert.match(
     giteeReportText(snapshot, {

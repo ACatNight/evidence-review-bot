@@ -76,19 +76,29 @@ export function giteeReportText(snapshot: PullRequestSnapshot, report: ReviewRep
     aiReview.inspectedFiles === 0
       ? "候选问题：未评估"
       : `候选问题 ${aiReview.findings.length} 项${aiReview.state === "partial" ? "（仅已检查部分）" : ""}`;
+  const changedLineCoverage =
+    aiReview.inspectedChangedLines === undefined || aiReview.eligibleChangedLines === undefined
+      ? "变更行覆盖未记录（旧运行）"
+      : `${aiReview.inspectedChangedLines}/${aiReview.eligibleChangedLines} 行变更代码`;
   lines.push(
     "### AI 安全审查",
     "",
-    `状态：${aiState}；已检查 ${aiReview.inspectedFiles}/${aiReview.eligibleFiles} 个符合条件的文件；${aiCandidateText}。`,
+    `状态：${aiState}；已送入模型 ${aiReview.inspectedFiles}/${aiReview.eligibleFiles} 个符合条件的文件；${changedLineCoverage}；${aiCandidateText}。`,
   );
-  if (aiReview.unreviewedPaths?.length) {
-    lines.push("", "未进入 AI 审查的文件：");
-    for (const path of aiReview.unreviewedPaths.slice(0, 20)) {
-      lines.push(`- \`${display(path)}\``);
+  if (aiReview.unreviewedRanges?.length) {
+    lines.push("", "尚未完成 AI 审查的变更行：");
+    for (const range of aiReview.unreviewedRanges) {
+      lines.push(`- \`${display(range.path)}:${range.startLine}-${range.endLine}\``);
     }
-    if (aiReview.unreviewedPaths.length > 20) {
-      lines.push(`- 另有 ${aiReview.unreviewedPaths.length - 20} 个文件未列出。`);
+    const omittedRanges =
+      (aiReview.unreviewedRangeCount ?? aiReview.unreviewedRanges.length) -
+      aiReview.unreviewedRanges.length;
+    if (omittedRanges > 0) {
+      lines.push(`- 另有 ${omittedRanges} 个行段未列出。`);
     }
+  } else if (aiReview.unreviewedPaths?.length) {
+    lines.push("", "尚未完成 AI 审查的文件（旧运行未记录行段）：");
+    for (const path of aiReview.unreviewedPaths.slice(0, 20)) lines.push(`- \`${display(path)}\``);
   }
   const aiFailureText: Record<string, string> = {
     api_timeout: "AI 服务调用超时",
@@ -100,6 +110,7 @@ export function giteeReportText(snapshot: PullRequestSnapshot, report: ReviewRep
     api_unavailable_or_invalid_response: "AI 服务调用失败或返回内容无效",
     unreviewed_files: "部分符合条件的文件尚未进入 AI 审查",
     context_truncated: "部分文件的代码上下文超出输入上限，未展示的代码行尚未审查",
+    snapshot_incomplete: "部分代码文件或变更文件列表未能完整读取",
     file_list_truncated: "变更文件列表已截断，后续文件尚未审查",
     finding_limit: "候选问题超过报告展示上限，部分候选未列出",
   };

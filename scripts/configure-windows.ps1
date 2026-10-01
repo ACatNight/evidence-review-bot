@@ -71,7 +71,7 @@ if ($aiEnabled) {
   $aiKeyFile = Ask 'AI API key file (.dpapi or text)' $prior.aiKeyFile
   $aiModel = Ask 'AI model' $prior.aiModel
   $aiBaseUrl = Ask 'AI HTTPS base URL (blank for official OpenAI)' $prior.aiBaseUrl
-  $aiRepositories = Ask 'Allowed numeric repository IDs (GitHub/Gitee, comma-separated)' $prior.aiRepositories
+  $aiRepositories = Ask 'Allowed repositories (github:ID/gitee:ID, comma-separated)' $prior.aiRepositories
 }
 
 try { $databaseUri = [uri] $databaseUrl } catch { throw 'DATABASE_URL must be a PostgreSQL URL.' }
@@ -131,8 +131,8 @@ if ($giteeEnabled) {
 }
 if ($aiEnabled) {
   Require-File 'AI API key' $aiKeyFile
-  if (-not $aiModel -or $aiRepositories -notmatch '^\d+(,\s*\d+)*$') {
-    throw 'AI model and numeric repository allowlist are required.'
+  if (-not $aiModel -or $aiRepositories -notmatch '^(github|gitee):\d+(,\s*(github|gitee):\d+)*$') {
+    throw 'AI model and provider-prefixed repository allowlist are required.'
   }
   if ($aiBaseUrl) {
     try { $aiUri = [uri] $aiBaseUrl } catch { throw 'AI base URL must use HTTPS.' }

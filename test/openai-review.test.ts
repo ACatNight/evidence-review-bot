@@ -17,6 +17,7 @@ function responseWithFindings(findings: unknown, preface?: string) {
   };
 }
 const snapshot: PullRequestSnapshot = {
+  provider: "github",
   installationId: "1",
   repositoryId: "2",
   repositoryOwner: "example",
@@ -74,7 +75,11 @@ test("AI input includes changed Java lines", () => {
 });
 
 test("AI findings must point to changed lines and failed calls are not clean reviews", async () => {
-  const config = { apiKey: "test-key", model: "test-model", allowedRepositoryIds: new Set(["2"]) };
+  const config = {
+    apiKey: "test-key",
+    model: "test-model",
+    allowedRepositories: new Set(["github:2"]),
+  };
   const fake = {
     responses: {
       create: async (request: { store: boolean; input: unknown; max_output_tokens: number }) => {
@@ -146,7 +151,7 @@ test("AI findings must point to changed lines and failed calls are not clean rev
   assert.equal((await reviewWithOpenAI(snapshot, null)).state, "not_run");
 });
 
-test("AI review reports partial coverage when changed lines exceed the prompt limit", async () => {
+test("AI review continues through later chunks of the same file", async () => {
   const firstFile = snapshot.files[0];
   assert.ok(firstFile);
   const longSnapshot: PullRequestSnapshot = {
@@ -164,19 +169,110 @@ test("AI review reports partial coverage when changed lines exceed the prompt li
   const prepared = prepareAiInput(longSnapshot);
   assert.equal(prepared.truncatedContext, true);
   assert.equal(prepared.allowedLines.get("src/auth.ts")?.has(200), false);
+  let calls = 0;
   const fake = {
     responses: {
-      create: async () => responseWithFindings([]),
+      create: async () => {
+        calls++;
+        return responseWithFindings([]);
+      },
     },
   } as unknown as OpenAI;
   const result = await reviewWithOpenAI(
     longSnapshot,
-    { apiKey: "test-key", model: "test-model", allowedRepositoryIds: new Set(["2"]) },
+    { apiKey: "test-key", model: "test-model", allowedRepositories: new Set(["github:2"]) },
     fake,
+  );
+  assert.equal(calls, 2);
+  assert.equal(result.state, "complete");
+  assert.equal(result.inspectedChangedLines, 200);
+  assert.equal(result.eligibleChangedLines, 200);
+  assert.deepEqual(result.unreviewedPaths, []);
+  assert.deepEqual(result.unreviewedRanges, []);
+});
+
+test("AI review reports the exact remaining lines after the batch limit", async () => {
+  const file = snapshot.files[0];
+  assert.ok(file);
+  const large = {
+    ...snapshot,
+    files: [
+      {
+        ...file,
+        headText: Array.from({ length: 500 }, (_, index) => `const value${index} = ${index};`).join(
+          "\n",
+        ),
+        changedHeadLines: new Set(Array.from({ length: 500 }, (_, index) => index + 1)),
+      },
+    ],
+  };
+  const client = {
+    responses: { create: async () => responseWithFindings([]) },
+  } as unknown as OpenAI;
+  const result = await reviewWithOpenAI(
+    large,
+    { apiKey: "test-key", model: "test-model", allowedRepositories: new Set(["github:2"]) },
+    client,
   );
   assert.equal(result.state, "partial");
   assert.equal(result.reason, "context_truncated");
-  assert.deepEqual(result.unreviewedPaths, []);
+  assert.equal(result.inspectedFiles, 1);
+  assert.ok(result.inspectedChangedLines > 0 && result.inspectedChangedLines < 500);
+  assert.equal(result.eligibleChangedLines, 500);
+  assert.deepEqual(result.unreviewedPaths, ["src/auth.ts"]);
+  assert.deepEqual(result.unreviewedRanges, [
+    { path: "src/auth.ts", startLine: result.inspectedChangedLines + 1, endLine: 500 },
+  ]);
+  assert.equal(result.unreviewedRangeCount, 1);
+});
+
+test("AI coverage bounds the stored range list without losing its total", async () => {
+  const file = snapshot.files[0];
+  assert.ok(file);
+  const sparse = {
+    ...snapshot,
+    files: [
+      {
+        ...file,
+        headText: Array.from({ length: 60 }, () => "const value = 1;").join("\n"),
+        changedHeadLines: new Set(Array.from({ length: 30 }, (_, index) => index * 2 + 1)),
+      },
+    ],
+  };
+  const client = {
+    responses: {
+      create: async () => {
+        throw new Error("provider unavailable");
+      },
+    },
+  } as unknown as OpenAI;
+  const result = await reviewWithOpenAI(
+    sparse,
+    { apiKey: "test-key", model: "test-model", allowedRepositories: new Set(["github:2"]) },
+    client,
+  );
+  assert.equal(result.state, "error");
+  assert.equal(result.unreviewedRangeCount, 30);
+  assert.equal(result.unreviewedRanges?.length, 20);
+});
+
+test("AI repository authorization includes its platform", async () => {
+  const config = {
+    apiKey: "test-key",
+    model: "test-model",
+    allowedRepositories: new Set(["github:2"]),
+  };
+  assert.equal(
+    (await reviewWithOpenAI({ ...snapshot, provider: "gitee" }, config)).state,
+    "not_run",
+  );
+  const unreadable = {
+    ...snapshot,
+    files: [{ path: "src/auth.ts", blobSha: "d".repeat(40), reason: "read_failed" as const }],
+  };
+  const result = await reviewWithOpenAI(unreadable, config);
+  assert.equal(result.state, "partial");
+  assert.equal(result.reason, "snapshot_incomplete");
 });
 
 test("AI review batches Java changes and validates findings in later batches", async () => {
@@ -214,7 +310,7 @@ test("AI review batches Java changes and validates findings in later batches", a
   } as unknown as OpenAI;
   const result = await reviewWithOpenAI(
     { ...snapshot, files },
-    { apiKey: "test-key", model: "test-model", allowedRepositoryIds: new Set(["2"]) },
+    { apiKey: "test-key", model: "test-model", allowedRepositories: new Set(["github:2"]) },
     fake,
   );
   assert.equal(calls, 2);

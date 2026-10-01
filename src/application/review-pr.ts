@@ -130,7 +130,7 @@ export function checkOutput(
     `Coverage: ${coverage.state}; ${coverage.completedFiles}/${coverage.changedFiles} listed changed files checked${coverage.truncatedFiles ? " (more files were omitted)" : ""}. ` +
     `${findings.length} SEC-001 candidate(s). AI review: ${aiReview.state}` +
     (aiReview.state === "complete" || aiReview.state === "partial"
-      ? `, ${aiReview.findings.length} suggestion(s) from ${aiReview.inspectedFiles}/${aiReview.eligibleFiles} eligible files.`
+      ? `, ${aiReview.findings.length} suggestion(s) from ${aiReview.inspectedFiles}/${aiReview.eligibleFiles} eligible files${aiReview.inspectedChangedLines === undefined || aiReview.eligibleChangedLines === undefined ? " (changed-line coverage unavailable for this run)" : ` and ${aiReview.inspectedChangedLines}/${aiReview.eligibleChangedLines} eligible changed lines`}.`
       : ".") +
     " Neither check proves the PR is safe.";
   const lines = [

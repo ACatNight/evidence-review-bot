@@ -10,7 +10,7 @@
 - 长度至少 32 字节的十六进制 Review HMAC 主密钥。密钥必须长期保持一致。
 - 可选：`pg_ctl.exe` 与 PostgreSQL 数据目录，用于数据库未启动时自动启动。
 - 可选 ngrok 固定域名：账号分配的 Dev Domain、`ngrok.exe` 和仓库外的 authtoken 文件。不需要自有域名；免费账号的域名由 ngrok 分配，不能自选。
-- 可选 AI：API Key 文件、模型、HTTPS API 根地址、允许传输代码的 GitHub/Gitee 数字仓库 ID。AI 默认关闭。
+- 可选 AI：API Key 文件、模型、HTTPS API 根地址、允许传输代码的 `github:ID` 或 `gitee:ID`。AI 默认关闭。
 
 密钥文件放在仓库外；`.dpapi` 文件按当前 Windows 用户解密，普通文本文件也可读取，但应由操作系统访问控制保护。当前主机已有的文件路径列在[本地开发说明](local-development.md)，填写时可直接使用。此前发在聊天中的密钥应先撤销并更换。
 
@@ -60,7 +60,7 @@ $secure = Read-Host 'AI API key' -AsSecureString
 $secure | ConvertFrom-SecureString | Set-Content -LiteralPath 'D:\Tools\evidence-review-bot\ai-api-key.dpapi'
 ```
 
-然后在向导中填写密钥文件、模型、HTTPS API 根地址及允许传输代码的数字仓库 ID。仅白名单仓库会向该接口发送脱敏后的变更代码；确认服务商可接收这些代码后再开启。
+然后在向导中填写密钥文件、模型、HTTPS API 根地址及允许传输代码的 `github:ID` 或 `gitee:ID`（多个条目用逗号分隔）。旧的纯数字白名单必须改为带平台前缀的格式。仅白名单仓库会向该接口发送尽力脱敏后的变更代码；确认服务商可接收这些代码后再开启。
 
 `github` 与 `gitee` 是分别推送到 GitHub 和 Gitee 的长期发布分支；开发改动先进入 `dev`，验证后再同步到两个分支。Gitee 仓库适配启用后可接收 Gitee PR Webhook，并在 PR 评论中发布中文报告；它不提供 GitHub Check 或 Gitee 平台原生状态门禁。
 

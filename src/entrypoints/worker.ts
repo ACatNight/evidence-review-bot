@@ -40,9 +40,9 @@ if (process.env.OPENAI_REVIEW_ENABLED === "true") {
       "OPENAI_API_KEY, OPENAI_MODEL and OPENAI_ALLOWED_REPOSITORIES are required when AI review is enabled",
     );
   }
-  const allowedRepositoryIds = new Set(repositories.split(",").map((value) => value.trim()));
-  if ([...allowedRepositoryIds].some((value) => !/^\d+$/.test(value))) {
-    throw new Error("OPENAI_ALLOWED_REPOSITORIES must contain numeric GitHub repository IDs");
+  const allowedRepositories = new Set(repositories.split(",").map((value) => value.trim()));
+  if ([...allowedRepositories].some((value) => !/^(github|gitee):\d+$/.test(value))) {
+    throw new Error("OPENAI_ALLOWED_REPOSITORIES must contain provider-prefixed repository IDs");
   }
   if (baseURL) {
     let url: URL;
@@ -57,7 +57,7 @@ if (process.env.OPENAI_REVIEW_ENABLED === "true") {
       );
     }
   }
-  aiConfig = { apiKey, model, ...(baseURL ? { baseURL } : {}), allowedRepositoryIds };
+  aiConfig = { apiKey, model, ...(baseURL ? { baseURL } : {}), allowedRepositories };
 }
 const pool = new Pool({ connectionString });
 let stopping = false;

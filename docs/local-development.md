@@ -105,7 +105,7 @@ $secureKey = Read-Host 'OpenAI API key' -AsSecureString
 $secureKey | ConvertFrom-SecureString | Set-Content 'D:\Tools\evidence-review-bot\openai-api-key.dpapi'
 ```
 
-要启用 AI 审查，在启动 Worker 的同一个 PowerShell 窗口运行以下命令；API 进程无需 OpenAI 密钥。`OPENAI_ALLOWED_REPOSITORIES` 使用 GitHub 数字仓库 ID，此测试仓库为 `1398812131`。先停止旧 Worker，再按上一节的数据库与 GitHub App 环境变量启动新 Worker。
+要启用 AI 审查，在启动 Worker 的同一个 PowerShell 窗口运行以下命令；API 进程无需 OpenAI 密钥。`OPENAI_ALLOWED_REPOSITORIES` 使用 `github:ID` 或 `gitee:ID`，两个平台的数字 ID 不互相授权；此测试仓库为 `github:1398812131`。先停止旧 Worker，再按上一节的数据库与 GitHub App 环境变量启动新 Worker。
 
 ```powershell
 $secureKey = Get-Content 'D:\Tools\evidence-review-bot\openai-api-key.dpapi' | ConvertTo-SecureString
@@ -114,13 +114,13 @@ try { $env:OPENAI_API_KEY = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($
 finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($pointer) }
 $env:OPENAI_REVIEW_ENABLED = 'true'
 $env:OPENAI_MODEL = 'gpt-6-luna'
-$env:OPENAI_ALLOWED_REPOSITORIES = '1398812131'
+$env:OPENAI_ALLOWED_REPOSITORIES = 'github:1398812131'
 npm run start:worker
 ```
 
 `OPENAI_BASE_URL` 可选，未设置时使用 OpenAI 官方 API。使用兼容服务时，在启动 Worker 前将它设为该服务的 HTTPS API 根路径（通常以 `/v1` 结尾），并使用该服务新签发的密钥；Codex 的 `~/.codex/config.toml` 和 `~/.codex/auth.json` 不会被本项目读取。第三方服务可能不支持 Responses API、结构化输出或 `store: false`，也可能有不同的数据处理政策；先确认仓库代码可发送给该服务，再只对白名单测试仓库启用。兼容性未经过真实调用验证时，报告会把请求失败标记为 `error`。
 
-模型仅接收白名单仓库中最多 8 个 JS/TS 文件的变更行与少量上下文，单次文本上限 16,000 字符。已知凭据格式和敏感赋值会先脱敏，私钥文件跳过；这不能保证识别所有秘密，所以只对明确允许传输代码的仓库开启。调用使用 Responses API 的结构化输出及 `store: false`，结果仍需人工核对。未配置或未授权时标为 `not_run`，API 错误标为 `error`，不会显示为已通过审查。模型输出不作为确定性事实；OpenAI 用法参见[官方 Quickstart](https://developers.openai.com/api/docs/quickstart)和[Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs)。
+模型每批接收白名单仓库中最多 8 个 JS/TS/Java 文件的变更行与少量上下文，单批文本上限 16,000 字符；最多运行 4 批，每个文件每批最多选取 120 行。超限的剩余变更行会在后续批次继续审查，达到批次上限时在报告中列出未审行段。已知凭据格式和敏感赋值会先脱敏，私钥文件跳过；这不能保证识别所有秘密，所以只对明确允许传输代码的仓库开启。调用使用 Responses API 的结构化输出及 `store: false`，结果仍需人工核对。未配置或未授权时标为 `not_run`，API 错误标为 `error`，不会显示为已通过审查。模型输出不作为确定性事实；OpenAI 用法参见[官方 Quickstart](https://developers.openai.com/api/docs/quickstart)和[Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs)。
 
 仓库的 `.github/workflows/quality.yml` 会在 PR 上独立运行 Biome Lint、TypeScript 类型检查、带 PostgreSQL 的测试、`npm audit` 和 CodeQL JavaScript/TypeScript 分析。npm 审计显式使用官方 registry，因为本机默认镜像未实现 audit 接口。工作流 Checks 与 Bot Check 分别展示；它们不能证明不存在所有安全缺陷。
 

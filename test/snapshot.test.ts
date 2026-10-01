@@ -16,6 +16,7 @@ test("diff parser accepts complete hunks and rejects truncated patches", () => {
 test("review report redacts candidates and marks incomplete coverage", () => {
   const token = `ghp_${"A".repeat(36)}`;
   const snapshot: PullRequestSnapshot = {
+    provider: "github",
     installationId: "123",
     repositoryId: "456",
     repositoryOwner: "example",

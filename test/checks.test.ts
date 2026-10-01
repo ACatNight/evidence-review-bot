@@ -7,6 +7,7 @@ import { AI_NOT_RUN } from "../src/adapters/openai/security-review.js";
 import type { ReviewReport } from "../src/application/review-pr.js";
 
 const snapshot: PullRequestSnapshot = {
+  provider: "github",
   installationId: "1",
   repositoryId: "2",
   repositoryOwner: "example",

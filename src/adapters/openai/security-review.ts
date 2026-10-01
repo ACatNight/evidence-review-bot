@@ -2,12 +2,13 @@ import OpenAI from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
 import { z } from "zod";
 import { githubFineGrainedTokenPattern } from "../../rules/secret.js";
-import type { PullRequestSnapshot } from "../github/snapshot.js";
+import type { PullRequestSnapshot, SnapshotFile } from "../github/snapshot.js";
 
 const MAX_FILES = 8;
 const MAX_BATCHES = 4;
 const MAX_PROMPT_CHARS = 16_000;
 const MAX_LINES_PER_FILE = 120;
+const MAX_REPORTED_RANGES = 20;
 
 function failureReason(error: unknown): string {
   if (error instanceof Error && error.name === "AiOutputLimitError") return "api_output_limit";
@@ -50,9 +51,13 @@ export interface AiReview {
   readonly model: string | null;
   readonly inspectedFiles: number;
   readonly eligibleFiles: number;
+  readonly inspectedChangedLines: number;
+  readonly eligibleChangedLines: number;
   readonly findings: readonly AiFinding[];
   readonly reason: string | null;
   readonly unreviewedPaths?: readonly string[];
+  readonly unreviewedRanges?: readonly { path: string; startLine: number; endLine: number }[];
+  readonly unreviewedRangeCount?: number;
 }
 
 export interface AiReviewConfig {
@@ -60,7 +65,7 @@ export interface AiReviewConfig {
   readonly model: string;
   readonly baseURL?: string;
   readonly language?: "zh-CN";
-  readonly allowedRepositoryIds: ReadonlySet<string>;
+  readonly allowedRepositories: ReadonlySet<string>;
 }
 
 export const AI_NOT_RUN: AiReview = {
@@ -68,6 +73,8 @@ export const AI_NOT_RUN: AiReview = {
   model: null,
   inspectedFiles: 0,
   eligibleFiles: 0,
+  inspectedChangedLines: 0,
+  eligibleChangedLines: 0,
   findings: [],
   reason: "disabled",
 };
@@ -127,20 +134,33 @@ export function prepareAiInput(snapshot: PullRequestSnapshot): {
       }
     }
     const selectedLines = [...selected].sort((left, right) => left - right);
-    if (selectedLines.length > MAX_LINES_PER_FILE) truncatedContext = true;
-    const numbered = selectedLines
-      .slice(0, MAX_LINES_PER_FILE)
-      .map((line) => `${line}: ${redact(lines[line - 1] ?? "")}`)
-      .join("\n");
-    const block = `File: ${JSON.stringify(file.path)}\n${numbered}`;
-    if (totalChars + block.length > MAX_PROMPT_CHARS) {
-      if (block.length > MAX_PROMPT_CHARS) truncatedContext = true;
+    let visibleLines = selectedLines.slice(0, MAX_LINES_PER_FILE);
+    const blockFor = (lineNumbers: readonly number[]) =>
+      `File: ${JSON.stringify(file.path)}\n${lineNumbers.map((line) => `${line}: ${redact(lines[line - 1] ?? "")}`).join("\n")}`;
+    let block = blockFor(visibleLines);
+    if (
+      totalChars + block.length + (blocks.length > 0 ? 2 : 0) > MAX_PROMPT_CHARS &&
+      blocks.length > 0
+    )
       continue;
+    while (block.length > MAX_PROMPT_CHARS && visibleLines.length > 0) {
+      visibleLines = visibleLines.slice(0, -1);
+      block = blockFor(visibleLines);
     }
+    if (![...changed].some((line) => visibleLines.includes(line))) {
+      visibleLines = selectedLines.filter((line) => changed.has(line)).slice(0, MAX_LINES_PER_FILE);
+      block = blockFor(visibleLines);
+      while (block.length > MAX_PROMPT_CHARS && visibleLines.length > 0) {
+        visibleLines = visibleLines.slice(0, -1);
+        block = blockFor(visibleLines);
+      }
+    }
+    if (visibleLines.length === 0) continue;
+    if (selectedLines.length > visibleLines.length) truncatedContext = true;
     blocks.push(block);
-    totalChars += block.length;
-    const visibleLines = new Set(selectedLines.slice(0, MAX_LINES_PER_FILE));
-    allowedLines.set(file.path, new Set([...changed].filter((line) => visibleLines.has(line))));
+    totalChars += block.length + (blocks.length > 1 ? 2 : 0);
+    const visible = new Set(visibleLines);
+    allowedLines.set(file.path, new Set([...changed].filter((line) => visible.has(line))));
   }
   return {
     input: blocks.join("\n\n"),
@@ -149,6 +169,33 @@ export function prepareAiInput(snapshot: PullRequestSnapshot): {
     allowedLines,
     truncatedContext,
   };
+}
+
+function unreviewedRanges(files: readonly SnapshotFile[]): {
+  readonly ranges: readonly { path: string; startLine: number; endLine: number }[];
+  readonly count: number;
+} {
+  const ranges: { path: string; startLine: number; endLine: number }[] = [];
+  let count = 0;
+  for (const file of files) {
+    const lines = [...(file.changedHeadLines ?? [])].sort((left, right) => left - right);
+    let previousLine = -2;
+    for (const line of lines) {
+      if (previousLine + 1 === line) {
+        if (count <= MAX_REPORTED_RANGES) {
+          const previous = ranges.at(-1);
+          if (previous) previous.endLine = line;
+        }
+      } else {
+        count++;
+        if (ranges.length < MAX_REPORTED_RANGES) {
+          ranges.push({ path: file.path, startLine: line, endLine: line });
+        }
+      }
+      previousLine = line;
+    }
+  }
+  return { ranges, count };
 }
 
 function safeFinding(finding: AiFinding): AiFinding {
@@ -165,7 +212,8 @@ export async function reviewWithOpenAI(
   config: AiReviewConfig | null,
   client?: OpenAI,
 ): Promise<AiReview> {
-  if (!config?.allowedRepositoryIds.has(snapshot.repositoryId)) return AI_NOT_RUN;
+  if (!config?.allowedRepositories.has(`${snapshot.provider}:${snapshot.repositoryId}`))
+    return AI_NOT_RUN;
   const eligible = snapshot.files.filter(
     (file) =>
       supportedPath(file.path) &&
@@ -173,20 +221,31 @@ export async function reviewWithOpenAI(
       file.changedHeadLines !== undefined &&
       file.changedHeadLines.size > 0,
   );
+  const eligibleChangedLines = eligible.reduce(
+    (total, file) => total + (file.changedHeadLines?.size ?? 0),
+    0,
+  );
+  const snapshotIncomplete =
+    snapshot.truncatedFiles ||
+    snapshot.files.some((file) => supportedPath(file.path) && file.reason !== undefined);
   if (eligible.length === 0) {
     return {
-      state: "not_run",
+      state: snapshotIncomplete ? "partial" : "not_run",
       model: config.model,
       inspectedFiles: 0,
       eligibleFiles: 0,
+      inspectedChangedLines: 0,
+      eligibleChangedLines: 0,
       findings: [],
-      reason: "no_eligible_code",
+      reason: snapshotIncomplete ? "snapshot_incomplete" : "no_eligible_code",
       unreviewedPaths: [],
+      unreviewedRanges: [],
+      unreviewedRangeCount: 0,
     };
   }
   let remaining = eligible;
-  let inspectedFiles = 0;
-  let truncatedContext = false;
+  const inspectedPaths = new Set<string>();
+  let inspectedChangedLines = 0;
   let failed = false;
   let errorReason: string | null = null;
   const findings: AiFinding[] = [];
@@ -255,52 +314,65 @@ export async function reviewWithOpenAI(
             )
             .map(safeFinding),
         );
-        inspectedFiles += prepared.inspectedFiles;
-        truncatedContext ||= prepared.truncatedContext;
-        remaining = remaining.filter((file) => !prepared.allowedLines.has(file.path));
+        for (const [path, lines] of prepared.allowedLines) {
+          inspectedPaths.add(path);
+          inspectedChangedLines += lines.size;
+        }
+        remaining = remaining.flatMap((file) => {
+          const reviewed = prepared.allowedLines.get(file.path);
+          if (!reviewed) return [file];
+          const pending = new Set(
+            [...(file.changedHeadLines ?? [])].filter((line) => !reviewed.has(line)),
+          );
+          return pending.size > 0 ? [{ ...file, changedHeadLines: pending }] : [];
+        });
       } catch (error) {
         failed = true;
         errorReason = failureReason(error);
         break;
       }
     }
+    const gaps = unreviewedRanges(remaining);
     return {
       state:
-        failed && inspectedFiles === 0
+        failed && inspectedChangedLines === 0
           ? "error"
-          : failed ||
-              remaining.length > 0 ||
-              truncatedContext ||
-              snapshot.truncatedFiles ||
-              findings.length > 10
+          : failed || remaining.length > 0 || snapshotIncomplete || findings.length > 10
             ? "partial"
             : "complete",
       model: config.model,
-      inspectedFiles,
+      inspectedFiles: inspectedPaths.size,
       eligibleFiles: eligible.length,
+      inspectedChangedLines,
+      eligibleChangedLines,
       findings: findings.slice(0, 10),
       reason: failed
         ? errorReason
         : remaining.length > 0
-          ? "unreviewed_files"
-          : truncatedContext
-            ? "context_truncated"
-            : snapshot.truncatedFiles
-              ? "file_list_truncated"
-              : findings.length > 10
-                ? "finding_limit"
-                : null,
+          ? "context_truncated"
+          : snapshotIncomplete
+            ? "snapshot_incomplete"
+            : findings.length > 10
+              ? "finding_limit"
+              : null,
       unreviewedPaths: remaining.map((file) => file.path),
+      unreviewedRanges: gaps.ranges,
+      unreviewedRangeCount: gaps.count,
     };
   } catch (error) {
+    const gaps = unreviewedRanges(remaining);
     return {
       state: "error",
       model: config.model,
-      inspectedFiles,
+      inspectedFiles: inspectedPaths.size,
       eligibleFiles: eligible.length,
+      inspectedChangedLines,
+      eligibleChangedLines,
       findings: [],
       reason: failureReason(error),
       unreviewedPaths: remaining.map((file) => file.path),
+      unreviewedRanges: gaps.ranges,
+      unreviewedRangeCount: gaps.count,
     };
   }
 }

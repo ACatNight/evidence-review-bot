@@ -9,7 +9,7 @@
 3. 运行 `powershell -NoProfile -File .\scripts\stop-windows.ps1` 和 `powershell -NoProfile -File .\scripts\start-windows.ps1`，让 API 和 Worker 加载新配置。
 4. 运行 `powershell -NoProfile -File .\scripts\review-gitee-windows.ps1 -PullRequest 1` 将 PR #1 入队；Worker 会在 Gitee PR 评论中发布中文审查报告。相同提交重新触发时，通过隐藏标记避免重复创建评论。
 
-报告列出 SEC-001 确定性结果、已检查文件、未检查范围和可选 AI 候选；AI 默认关闭。`partial` 和 `error` 必须按未完成解释，零项候选不等于安全。私人令牌只传给 Worker 的 Gitee API 客户端，不传给 AI 服务。要向模型发送 Gitee 代码，需单独开启 AI 并把 Gitee 数字仓库 ID 加入允许列表。
+报告列出 SEC-001 确定性结果、已检查文件、未检查范围和可选 AI 候选；AI 默认关闭。`partial` 和 `error` 必须按未完成解释，零项候选不等于安全。私人令牌只传给 Worker 的 Gitee API 客户端，不传给 AI 服务。要向模型发送 Gitee 代码，需单独开启 AI 并把 `gitee:数字仓库 ID` 加入允许列表；相同数字的 GitHub 仓库不会因此获得授权。
 
 ## 组织仓库 `vcagegame/witness-skin`
 

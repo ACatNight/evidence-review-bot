@@ -21,6 +21,7 @@ export interface SnapshotFile {
 }
 
 export interface PullRequestSnapshot {
+  readonly provider: "github" | "gitee";
   readonly installationId: string;
   readonly repositoryId: string;
   readonly repositoryOwner: string;
@@ -193,6 +194,7 @@ export async function fetchSnapshot(
     }
   }
   return {
+    provider: "github",
     installationId,
     repositoryId,
     repositoryOwner: repository.owner,
