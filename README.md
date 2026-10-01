@@ -30,6 +30,7 @@ GitHub、Gitee、GitLab 接入属于平台兼容性。自托管、自选模型�
 | [规则契约](docs/rules.md) | 三条候选规则、抑制、覆盖范围、测试约束 |
 | [SEC-001 当前实现边界](docs/sec-001-implementation.md) | 已支持格式、漏报边界与接入前验证 |
 | [本地开发与数据库验证](docs/local-development.md) | D 盘 PostgreSQL 实例、迁移与集成测试 |
+| [Windows 快速部署](docs/deployment-windows.md) | 首次填写配置，之后一条命令启动或停止 |
 | [安全与数据处理](docs/security.md) | 信任边界、脱敏、访问隔离、留存 |
 | [架构决策记录](docs/decisions.md) | 推荐方案、取舍、待验证问题 |
 | [实施路线](docs/roadmap.md) | 阶段交付、验收、试点门槛 |
@@ -37,6 +38,8 @@ GitHub、Gitee、GitLab 接入属于平台兼容性。自托管、自选模型�
 建议阅读顺序：首版实施基线 → 架构设计 → 数据模型 → 实施路线。竞争定位与试点评估分别见对应文档。
 
 ## 本地验证
+
+Windows 本机部署先运行 `powershell -NoProfile -File .\scripts\configure-windows.ps1` 填写一次路径和参数，之后运行 `powershell -NoProfile -File .\scripts\start-windows.ps1` 启动 API 与 Worker。停止使用 `powershell -NoProfile -File .\scripts\stop-windows.ps1`。需要 Node.js、PostgreSQL 和可到达本机 API 的 HTTPS Webhook 地址，详见[快速部署](docs/deployment-windows.md)。
 
 需要 Node.js 22.22.2 和 npm。执行 `npm ci` 安装锁定依赖，`npm run check` 做类型检查，`npm test` 编译并运行测试。`src/domain/` 包含平台无关契约、覆盖汇总与证据图校验；`src/rules/secret.ts` 包含仅支持明确格式的 Secret 候选检测器。测试位于 `test/`。
 

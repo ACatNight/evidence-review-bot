@@ -1,6 +1,6 @@
 # 本地开发与数据库验证
 
-Webhook API 在原始请求体上校验 GitHub 签名并将 PR 事件入队。Worker 使用安装令牌读取固定 SHA 的 PR 快照、执行 SEC-001 候选扫描，并发布 Check 汇总。已在测试仓库验证只读快照；Check 发布、权限撤销和故障恢复仍需真实平台验收。
+Webhook API 在原始请求体上校验 GitHub 签名并将 PR 事件入队。Worker 使用安装令牌读取固定 SHA 的 PR 快照、执行 SEC-001 候选扫描，并发布 Check 汇总。测试仓库已验证 Check 发布；权限撤销和故障恢复仍需真实平台验收。首次配置可使用[Windows 快速部署](deployment-windows.md)，本文件保留手动开发步骤。
 
 ## 环境
 
