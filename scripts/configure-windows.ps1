@@ -35,7 +35,18 @@ $postgresCtlPath = Ask 'pg_ctl.exe path (blank if PostgreSQL is managed separate
 $postgresDataPath = if ($postgresCtlPath) {
   Ask 'PostgreSQL data directory' $prior.postgresDataPath
 } else { '' }
-$publicWebhookUrl = Ask 'Public HTTPS Webhook URL (optional)' $prior.publicWebhookUrl
+$ngrokDefault = if ($prior.ngrokEnabled) { 'y' } else { 'n' }
+$ngrokEnabled = (Ask 'Use an ngrok static domain? (y/n)' $ngrokDefault) -match '^[yY]$'
+$ngrokExecutablePath = ''
+$ngrokAuthtokenFile = ''
+$ngrokDomain = ''
+if ($ngrokEnabled) {
+  $ngrokExecutablePath = Ask 'ngrok.exe path' $(if ($prior.ngrokExecutablePath) { $prior.ngrokExecutablePath } else { 'D:\Tools\ngrok\ngrok.exe' })
+  $ngrokAuthtokenFile = Ask 'ngrok authtoken file (.dpapi or text)' $prior.ngrokAuthtokenFile
+  $ngrokDomain = Ask 'Assigned ngrok domain (without https://)' $prior.ngrokDomain
+}
+$publicWebhookUrl = if ($ngrokEnabled) { "https://$ngrokDomain/webhooks/github" }
+else { Ask 'Public HTTPS Webhook URL (optional)' $prior.publicWebhookUrl }
 $giteeDefault = if ($prior.giteeEnabled) { 'y' } else { 'n' }
 $giteeEnabled = (Ask 'Enable Gitee PR review? (y/n)' $giteeDefault) -match '^[yY]$'
 $giteeTokenFile = ''
@@ -60,7 +71,7 @@ if ($aiEnabled) {
   $aiKeyFile = Ask 'AI API key file (.dpapi or text)' $prior.aiKeyFile
   $aiModel = Ask 'AI model' $prior.aiModel
   $aiBaseUrl = Ask 'AI HTTPS base URL (blank for official OpenAI)' $prior.aiBaseUrl
-  $aiRepositories = Ask 'Allowed GitHub numeric repository IDs (comma-separated)' $prior.aiRepositories
+  $aiRepositories = Ask 'Allowed numeric repository IDs (GitHub/Gitee, comma-separated)' $prior.aiRepositories
 }
 
 try { $databaseUri = [uri] $databaseUrl } catch { throw 'DATABASE_URL must be a PostgreSQL URL.' }
@@ -93,6 +104,16 @@ if ($postgresCtlPath) {
 }
 if ($publicWebhookUrl -and $publicWebhookUrl -notmatch '^https://.+/webhooks/github$') {
   throw 'Public Webhook URL must be HTTPS and end in /webhooks/github.'
+}
+if ($ngrokEnabled) {
+  Require-File 'ngrok.exe' $ngrokExecutablePath
+  Require-File 'ngrok authtoken' $ngrokAuthtokenFile
+  if ($ngrokDomain -notmatch '^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$') {
+    throw 'Assigned ngrok domain must be a hostname without a scheme or path.'
+  }
+  if ((Read-ReviewBotSecret $ngrokAuthtokenFile).Length -lt 16) {
+    throw 'ngrok authtoken must contain at least 16 characters.'
+  }
 }
 if ($giteeEnabled) {
   Require-File 'Gitee API token' $giteeTokenFile
@@ -132,6 +153,10 @@ $config = [ordered]@{
   postgresCtlPath = $postgresCtlPath
   postgresDataPath = $postgresDataPath
   publicWebhookUrl = $publicWebhookUrl
+  ngrokEnabled = $ngrokEnabled
+  ngrokExecutablePath = $ngrokExecutablePath
+  ngrokAuthtokenFile = $ngrokAuthtokenFile
+  ngrokDomain = $ngrokDomain
   giteeEnabled = $giteeEnabled
   giteeTokenFile = $giteeTokenFile
   giteeOwner = $giteeOwner

@@ -7,7 +7,7 @@ if (-not (Test-Path -LiteralPath $runPath -PathType Leaf)) {
   exit 0
 }
 $run = Get-Content -LiteralPath $runPath -Raw | ConvertFrom-Json
-foreach ($name in @('worker', 'api')) {
+foreach ($name in @('tunnel', 'worker', 'api')) {
   $entry = $run.$name
   if (Test-ReviewBotProcess $entry) {
     Stop-Process -Id ([int] $entry.pid)
