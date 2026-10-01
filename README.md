@@ -2,7 +2,7 @@
 
 开放、平台无关的 PR Review Engine，以确定性检查和可验证证据支持审查决策。
 
-**当前状态：领域基础和 SEC-001 候选扫描器已实现，尚无可运行的审查服务或 GitHub 集成。下面的产品能力仍是计划。**
+**当前状态：领域基础、SEC-001 候选扫描器和 PostgreSQL 任务基础已实现，尚无可运行的审查服务或 GitHub 集成。下面的产品能力仍是计划。**
 
 项目希望减少没有依据的审查评论：先使用可验证的规则发现问题，再按需获取上下文和调用模型，并把每项结论绑定到具体代码快照、规则版本和证据来源。
 
@@ -29,6 +29,7 @@ GitHub、Gitee、GitLab 接入属于平台兼容性。自托管、自选模型�
 | [平台接入](docs/platforms.md) | 平台能力、授权、diff 定位与降级 |
 | [规则契约](docs/rules.md) | 三条候选规则、抑制、覆盖范围、测试约束 |
 | [SEC-001 当前实现边界](docs/sec-001-implementation.md) | 已支持格式、漏报边界与接入前验证 |
+| [本地开发与数据库验证](docs/local-development.md) | D 盘 PostgreSQL 实例、迁移与集成测试 |
 | [安全与数据处理](docs/security.md) | 信任边界、脱敏、访问隔离、留存 |
 | [架构决策记录](docs/decisions.md) | 推荐方案、取舍、待验证问题 |
 | [实施路线](docs/roadmap.md) | 阶段交付、验收、试点门槛 |
@@ -39,7 +40,7 @@ GitHub、Gitee、GitLab 接入属于平台兼容性。自托管、自选模型�
 
 需要 Node.js 22.22.2 和 npm。执行 `npm ci` 安装锁定依赖，`npm run check` 做类型检查，`npm test` 编译并运行测试。`src/domain/` 包含平台无关契约、覆盖汇总与证据图校验；`src/rules/secret.ts` 包含仅支持明确格式的 Secret 候选检测器。测试位于 `test/`。
 
-尚无服务器启动命令。下一个交付单元是[路线图](docs/roadmap.md)中的 T02：PostgreSQL 迁移、任务队列与租约恢复。数据库集成测试需要可运行的 PostgreSQL；当前本机没有可用实例。
+尚无审查服务器启动命令。`npm run db:migrate` 应用数据库迁移；数据库测试需按[本地开发说明](docs/local-development.md)提供独立测试库。下一步是 GitHub Webhook 与只读 PR 快照接入，并把已实现的任务领取用于实际 Worker。
 
 ## 设计原则
 

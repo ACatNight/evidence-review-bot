@@ -8,14 +8,19 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "db:migrate": "npm run build && node dist/src/entrypoints/migrate.js",
     "check": "tsc -p tsconfig.json --noEmit",
     "lint": "biome check src test package.json tsconfig.json biome.json",
     "format": "biome check --write src test package.json tsconfig.json biome.json",
-    "test": "npm run build && node --test dist/test/domain.test.js dist/test/secret.test.js"
+    "test": "npm run build && node --test dist/test/domain.test.js dist/test/secret.test.js dist/test/postgres.test.js"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.14",
     "@types/node": "22.18.6",
+    "@types/pg": "8.15.5",
     "typescript": "5.9.3"
+  },
+  "dependencies": {
+    "pg": "8.23.1"
   }
 }
