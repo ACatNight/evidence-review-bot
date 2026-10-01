@@ -2,7 +2,7 @@
 
 开放、平台无关的 PR Review Engine，以确定性检查和可验证证据支持审查决策。
 
-**当前状态：领域基础、SEC-001 候选扫描器、PostgreSQL 任务基础和 GitHub Webhook 接收 API 已实现。尚不能自动完成 PR 审查；下面的完整产品能力仍是计划。**
+**当前状态：GitHub Webhook、固定 SHA 的 PR 快照、SEC-001 候选扫描和 Check 汇总已接通。反馈、抑制、回放和完整审计仍未实现；当前只适合测试仓库联调。**
 
 项目希望减少没有依据的审查评论：先使用可验证的规则发现问题，再按需获取上下文和调用模型，并把每项结论绑定到具体代码快照、规则版本和证据来源。
 
@@ -40,7 +40,7 @@ GitHub、Gitee、GitLab 接入属于平台兼容性。自托管、自选模型�
 
 需要 Node.js 22.22.2 和 npm。执行 `npm ci` 安装锁定依赖，`npm run check` 做类型检查，`npm test` 编译并运行测试。`src/domain/` 包含平台无关契约、覆盖汇总与证据图校验；`src/rules/secret.ts` 包含仅支持明确格式的 Secret 候选检测器。测试位于 `test/`。
 
-`npm run db:migrate` 应用数据库迁移，`npm run start:api` 启动 Webhook 接收 API，`npm run inspect:queue` 查看接收后的任务状态；数据库测试和 GitHub App 联调步骤见[本地开发说明](docs/local-development.md)。下一步是只读 PR 快照接入，并把已实现的任务领取用于实际 Worker。
+`npm run db:migrate` 应用数据库迁移，`npm run start:api` 启动 Webhook 接收 API，`npm run start:worker` 处理任务并发布 Check，`npm run inspect:queue` 查看任务与发布状态。数据库测试和 GitHub App 联调步骤见[本地开发说明](docs/local-development.md)。
 
 ## 设计原则
 

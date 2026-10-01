@@ -1,6 +1,6 @@
 # 本地开发与数据库验证
 
-Webhook API 入口已实现：在原始请求体上校验 GitHub 签名、筛选 PR 事件、持久化投递与 snapshot 任务，并提供 `/healthz`。数据库模块已有迁移、去重、租约领取/续期、重试和审计记录。当前尚未获取 PR 快照、执行 Worker 或发布 Check；真实 GitHub App 的事件与权限仍需验证。
+Webhook API 在原始请求体上校验 GitHub 签名并将 PR 事件入队。Worker 使用安装令牌读取固定 SHA 的 PR 快照、执行 SEC-001 候选扫描，并发布 Check 汇总。已在测试仓库验证只读快照；Check 发布、权限撤销和故障恢复仍需真实平台验收。
 
 ## 环境
 
@@ -60,7 +60,7 @@ $env:DATABASE_URL = 'postgresql://reviewbot@127.0.0.1:55432/evidence_review_bot_
 npm run start:api
 ```
 
-以后启动时只需从同一个密钥文件读取，不要重新生成。密钥不能进入 Git、聊天、日志或公开 URL。GitHub App 选择 `Pull requests: Read-only`、`Contents: Read-only`、`Checks: Read and write`，只订阅 `Pull request` 事件；其余权限保持默认。私钥 `.pem` 也放在仓库外，当前接收 API 尚不读取它。
+以后启动时只需从同一个密钥文件读取，不要重新生成。密钥不能进入 Git、聊天、日志或公开 URL。GitHub App 选择 `Pull requests: Read-only`、`Contents: Read-only`、`Checks: Read and write`，只订阅 `Pull request` 事件；其余权限保持默认。私钥 `.pem` 也放在仓库外，由 Worker 读取。
 
 本机试用的临时隧道工具位于 `D:\Tools\cloudflared\cloudflared.exe`。另开 PowerShell 窗口运行以下命令，并把输出的 `https://...trycloudflare.com` 加上 `/webhooks/github` 填入 GitHub App 的 Webhook URL：
 
@@ -70,7 +70,22 @@ npm run start:api
 
 临时隧道重启后地址可能变化。先访问隧道的 `/healthz` 验证转发，再到 GitHub App 的 Advanced / Recent Deliveries 检查投递。正常接收目标 PR 事件返回 HTTP `202`，响应 `{"queued":true}`；重复投递返回 `{"queued":false}`。`ping` 等不处理的事件也返回 `202` 和 `queued:false`。签名不一致返回 `401`，此时检查 GitHub 和 API 是否读取同一个密钥。
 
-在已设置数据库环境变量的另一个窗口运行 `npm run inspect:queue`，可以查看各状态任务数、最近 10 次投递和失败代码。命令只读，不输出 Webhook 请求体或密钥。当前没有 Worker，成功入队的 snapshot 任务会保持 `queued`；这只证明接收链路正常，并不代表已完成 PR 审查或发布 Check。
+Worker 需要 App ID、私钥路径和稳定的租户 HMAC 主密钥。主密钥在仓库外生成一次，后续从同一文件读取。以下命令在另一个 PowerShell 窗口运行；处理完当前一个任务就退出，持续处理改用 `npm run start:worker`：
+
+```powershell
+Set-Location 'D:\项目\Pr审查机器人'
+$env:PGPASSWORD = (Get-Content 'D:\Tools\PostgreSQL\review-bot\local-password.txt' -Raw).Trim()
+$env:DATABASE_URL = 'postgresql://reviewbot@127.0.0.1:55432/evidence_review_bot_dev'
+$env:GITHUB_APP_ID = '5147464'
+$env:GITHUB_PRIVATE_KEY_PATH = 'D:\Tools\evidence-review-bot\github-app.private-key.pem'
+$env:REVIEW_HMAC_KEY = (Get-Content 'D:\Tools\evidence-review-bot\review-hmac-key.txt' -Raw).Trim()
+npm run worker:once
+npm run inspect:queue
+```
+
+本机首次联调已在 `D:\Tools\evidence-review-bot\review-hmac-key.txt` 创建主密钥。其他部署须自行生成至少 32 字节随机密钥并安全保存，不要每次启动时重新生成。`inspect:queue` 只读，显示最近 10 次投递、任务状态、Check 发布状态和失败代码，不输出 Webhook 请求体或密钥。`published` 表示 GitHub 已返回 Check ID；`uncertain` 表示发布结果不确定，需要核对远端后处理，不能盲目重复创建。
+
+当前报告仅覆盖 SEC-001 列出的 GitHub 经典令牌和 PEM 私钥格式；不验证凭据有效性，不代表代码安全。对缺失 patch、读取失败、超限或超过 50 个文件的 PR，会在报告中标出覆盖缺口。Check 使用 `neutral` 结论，不设置为 required check。反馈、抑制、确定性回放和更完整的发布对账仍待实现。
 
 其他环境可以使用自己的 PostgreSQL 凭据与连接串。`npm test` 在缺少 `TEST_DATABASE_URL` 时跳过数据库集成测试，并在 TAP 输出中标明 SKIP；只有显式提供测试库时才算数据库行为得到验证。迁移按文件名顺序在事务中执行，记录 SHA-256 校验和；已应用 SQL 不允许原地改写，新变更需新增迁移文件。
 

@@ -40,6 +40,8 @@ test("normalizes only actionable open PR events", () => {
   if (parsed.kind === "review") {
     assert.equal(parsed.delivery.repositoryId, "20");
     assert.equal(parsed.delivery.pullRequestId, "42");
+    assert.equal(parsed.delivery.baseSha, "a".repeat(40));
+    assert.equal(parsed.delivery.headSha, "b".repeat(40));
   }
   assert.equal(parsePullRequestWebhook(payload, "issues", "delivery-1").kind, "ignored");
   assert.equal(parsePullRequestWebhook(payload, "pull_request", "bad id").kind, "invalid");
@@ -61,7 +63,7 @@ test("webhook API verifies before enqueuing and deduplicates delivery", {
     assert.equal(database.rows[0]?.current_database, "evidence_review_bot_test");
     await migrate(pool);
     await pool.query(
-      "TRUNCATE review_bot.audit_event, review_bot.review_job, review_bot.webhook_delivery RESTART IDENTITY",
+      "TRUNCATE review_bot.review_report, review_bot.audit_event, review_bot.review_job, review_bot.webhook_delivery RESTART IDENTITY",
     );
     const headers = {
       "content-type": "application/json",
@@ -94,6 +96,16 @@ test("webhook API verifies before enqueuing and deduplicates delivery", {
       payload,
     });
     assert.deepEqual(repeated.json(), { queued: false });
+    await pool.query(
+      "UPDATE review_bot.webhook_delivery SET base_sha = NULL, head_sha = NULL WHERE delivery_id = 'delivery-1'",
+    );
+    const legacyRepeated = await app.inject({
+      method: "POST",
+      url: "/webhooks/github",
+      headers,
+      payload,
+    });
+    assert.deepEqual(legacyRepeated.json(), { queued: false });
     const conflicting = Buffer.from(
       JSON.stringify({
         ...JSON.parse(payload.toString("utf8")),

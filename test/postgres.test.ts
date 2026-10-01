@@ -25,7 +25,7 @@ test("PostgreSQL delivery deduplication, lease fencing and retry", {
     await migrate(pool);
     await migrate(pool);
     await pool.query(
-      "TRUNCATE review_bot.audit_event, review_bot.review_job, review_bot.webhook_delivery RESTART IDENTITY",
+      "TRUNCATE review_bot.review_report, review_bot.audit_event, review_bot.review_job, review_bot.webhook_delivery RESTART IDENTITY",
     );
 
     const event = {
@@ -35,6 +35,8 @@ test("PostgreSQL delivery deduplication, lease fencing and retry", {
       eventType: "pull_request",
       repositoryId: "repo-1",
       pullRequestId: "42",
+      baseSha: "a".repeat(40),
+      headSha: "b".repeat(40),
       payloadDigest: "sha256:sample",
     };
     assert.equal(await enqueueSnapshot(pool, event), true);
@@ -117,6 +119,7 @@ test("PostgreSQL delivery deduplication, lease fencing and retry", {
     const failedDelivery = status.recentDeliveries.find((row) => row.deliveryId === "delivery-4");
     assert.equal(failedDelivery?.jobState, "failed");
     assert.equal(failedDelivery?.lastErrorCode, "attempts_exhausted");
+    assert.equal(failedDelivery?.publicationState, null);
   } finally {
     await pool.end();
   }

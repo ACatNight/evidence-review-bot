@@ -9,6 +9,8 @@ export interface QueueStatus {
     readonly receivedAt: Date;
     readonly jobState: string | null;
     readonly lastErrorCode: string | null;
+    readonly publicationState: string | null;
+    readonly checkRunId: string | null;
   }[];
 }
 
@@ -25,11 +27,15 @@ export async function getQueueStatus(pool: Pool): Promise<QueueStatus> {
       received_at: Date;
       job_state: string | null;
       last_error_code: string | null;
+      publication_state: string | null;
+      check_run_id: string | null;
     }>(
       `SELECT delivery.delivery_id, delivery.repository_id, delivery.pull_request_id,
-              delivery.received_at, job.state AS job_state, job.last_error_code
+              delivery.received_at, job.state AS job_state, job.last_error_code,
+              report.publication_state, report.check_run_id
        FROM review_bot.webhook_delivery AS delivery
        LEFT JOIN review_bot.review_job AS job ON job.delivery_id = delivery.id
+       LEFT JOIN review_bot.review_report AS report ON report.job_id = job.id
        ORDER BY delivery.received_at DESC, delivery.id DESC
        LIMIT 10`,
     ),
@@ -43,6 +49,8 @@ export async function getQueueStatus(pool: Pool): Promise<QueueStatus> {
       receivedAt: row.received_at,
       jobState: row.job_state,
       lastErrorCode: row.last_error_code,
+      publicationState: row.publication_state,
+      checkRunId: row.check_run_id,
     })),
   };
 }

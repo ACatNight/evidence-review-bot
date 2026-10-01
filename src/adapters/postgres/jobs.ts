@@ -8,6 +8,8 @@ export interface IncomingDelivery {
   readonly eventType: string;
   readonly repositoryId: string;
   readonly pullRequestId: string;
+  readonly baseSha: string;
+  readonly headSha: string;
   readonly payloadDigest: string;
 }
 
@@ -34,8 +36,9 @@ export async function enqueueSnapshot(pool: Pool, delivery: IncomingDelivery): P
   return transaction(pool, async (client) => {
     const inserted = await client.query<{ id: string }>(
       `INSERT INTO review_bot.webhook_delivery
-         (provider, installation_id, delivery_id, event_type, repository_id, pull_request_id, payload_digest)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+         (provider, installation_id, delivery_id, event_type, repository_id, pull_request_id,
+          base_sha, head_sha, payload_digest)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        ON CONFLICT (provider, installation_id, delivery_id) DO NOTHING
        RETURNING id`,
       [
@@ -45,6 +48,8 @@ export async function enqueueSnapshot(pool: Pool, delivery: IncomingDelivery): P
         delivery.eventType,
         delivery.repositoryId,
         delivery.pullRequestId,
+        delivery.baseSha,
+        delivery.headSha,
         delivery.payloadDigest,
       ],
     );
@@ -55,8 +60,10 @@ export async function enqueueSnapshot(pool: Pool, delivery: IncomingDelivery): P
         event_type: string;
         repository_id: string;
         pull_request_id: string;
+        base_sha: string | null;
+        head_sha: string | null;
       }>(
-        `SELECT payload_digest, event_type, repository_id, pull_request_id
+        `SELECT payload_digest, event_type, repository_id, pull_request_id, base_sha, head_sha
          FROM review_bot.webhook_delivery
          WHERE provider = $1 AND installation_id = $2 AND delivery_id = $3`,
         [delivery.provider, delivery.installationId, delivery.deliveryId],
@@ -67,7 +74,9 @@ export async function enqueueSnapshot(pool: Pool, delivery: IncomingDelivery): P
         prior.payload_digest !== delivery.payloadDigest ||
         prior.event_type !== delivery.eventType ||
         prior.repository_id !== delivery.repositoryId ||
-        prior.pull_request_id !== delivery.pullRequestId
+        prior.pull_request_id !== delivery.pullRequestId ||
+        (prior.base_sha !== null && prior.base_sha !== delivery.baseSha) ||
+        (prior.head_sha !== null && prior.head_sha !== delivery.headSha)
       ) {
         throw new Error("Conflicting payload for an existing delivery ID");
       }

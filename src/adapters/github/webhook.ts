@@ -32,7 +32,7 @@ function numericId(value: unknown): string | null {
     : null;
 }
 
-function sha(value: unknown): boolean {
+function sha(value: unknown): value is string {
   return typeof value === "string" && /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/i.test(value);
 }
 
@@ -65,7 +65,9 @@ export function parsePullRequestWebhook(
   const pullRequestId = numericId(pullRequest?.number);
   const base = object(pullRequest?.base);
   const head = object(pullRequest?.head);
-  if (!installationId || !repositoryId || !pullRequestId || !sha(base?.sha) || !sha(head?.sha)) {
+  const baseSha = base?.sha;
+  const headSha = head?.sha;
+  if (!installationId || !repositoryId || !pullRequestId || !sha(baseSha) || !sha(headSha)) {
     return { kind: "invalid" };
   }
   if (pullRequest?.state !== "open") return { kind: "ignored" };
@@ -79,6 +81,8 @@ export function parsePullRequestWebhook(
       eventType: "pull_request",
       repositoryId,
       pullRequestId,
+      baseSha,
+      headSha,
       payloadDigest: `sha256:${createHash("sha256").update(body).digest("hex")}`,
     },
   };
