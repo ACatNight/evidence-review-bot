@@ -24,6 +24,7 @@ let aiConfig: AiReviewConfig | null = null;
 if (process.env.OPENAI_REVIEW_ENABLED === "true") {
   const apiKey = process.env.OPENAI_API_KEY;
   const model = process.env.OPENAI_MODEL;
+  const baseURL = process.env.OPENAI_BASE_URL;
   const repositories = process.env.OPENAI_ALLOWED_REPOSITORIES;
   if (!apiKey || !model || !repositories) {
     throw new Error(
@@ -34,7 +35,20 @@ if (process.env.OPENAI_REVIEW_ENABLED === "true") {
   if ([...allowedRepositoryIds].some((value) => !/^\d+$/.test(value))) {
     throw new Error("OPENAI_ALLOWED_REPOSITORIES must contain numeric GitHub repository IDs");
   }
-  aiConfig = { apiKey, model, allowedRepositoryIds };
+  if (baseURL) {
+    let url: URL;
+    try {
+      url = new URL(baseURL);
+    } catch {
+      throw new Error("OPENAI_BASE_URL must be a valid HTTPS URL");
+    }
+    if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash) {
+      throw new Error(
+        "OPENAI_BASE_URL must be an HTTPS URL without credentials, query or fragment",
+      );
+    }
+  }
+  aiConfig = { apiKey, model, ...(baseURL ? { baseURL } : {}), allowedRepositoryIds };
 }
 const pool = new Pool({ connectionString });
 let stopping = false;

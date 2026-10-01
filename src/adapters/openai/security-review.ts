@@ -42,6 +42,7 @@ export interface AiReview {
 export interface AiReviewConfig {
   readonly apiKey: string;
   readonly model: string;
+  readonly baseURL?: string;
   readonly allowedRepositoryIds: ReadonlySet<string>;
 }
 
@@ -159,7 +160,14 @@ export async function reviewWithOpenAI(
     };
   }
   try {
-    const openai = client ?? new OpenAI({ apiKey: config.apiKey, timeout: 30_000, maxRetries: 1 });
+    const openai =
+      client ??
+      new OpenAI({
+        apiKey: config.apiKey,
+        baseURL: config.baseURL,
+        timeout: 30_000,
+        maxRetries: 1,
+      });
     const response = await openai.responses.parse({
       model: config.model,
       store: false,
