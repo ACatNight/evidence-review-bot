@@ -5,6 +5,7 @@ import type { PullRequestSnapshot } from "../src/adapters/github/snapshot.js";
 import { prepareAiInput, reviewWithOpenAI } from "../src/adapters/openai/security-review.js";
 
 const token = `ghp_${"A".repeat(36)}`;
+const fineGrainedToken = `github_pat_${"B".repeat(82)}`;
 const snapshot: PullRequestSnapshot = {
   installationId: "1",
   repositoryId: "2",
@@ -20,8 +21,8 @@ const snapshot: PullRequestSnapshot = {
       path: "src/auth.ts",
       blobSha: "d".repeat(40),
       baseText: "",
-      headText: `const credential = "${token}";\nconst apiKey = "private-value";\nallow(user);`,
-      changedHeadLines: new Set([1, 2, 3]),
+      headText: `const credential = "${token}";\nconst apiKey = "private-value";\nallow(user);\nconst value = "${fineGrainedToken}";`,
+      changedHeadLines: new Set([1, 2, 3, 4]),
     },
     {
       path: "src/private.ts",
@@ -38,6 +39,7 @@ test("AI input is bounded, masks credential lines and skips private key files", 
   assert.equal(prepared.inspectedFiles, 1);
   assert.equal(prepared.eligibleFiles, 2);
   assert.equal(prepared.input.includes(token), false);
+  assert.equal(prepared.input.includes(fineGrainedToken), false);
   assert.equal(prepared.input.includes("private-value"), false);
   assert.equal(prepared.input.includes("src/private.ts"), false);
 });
@@ -49,6 +51,7 @@ test("AI findings must point to changed lines and failed calls are not clean rev
       parse: async (request: { store: boolean; input: unknown }) => {
         assert.equal(request.store, false);
         assert.equal(JSON.stringify(request.input).includes(token), false);
+        assert.equal(JSON.stringify(request.input).includes(fineGrainedToken), false);
         return {
           status: "completed",
           output_parsed: {
@@ -60,7 +63,7 @@ test("AI findings must point to changed lines and failed calls are not clean rev
                 severity: "high",
                 confidence: "medium",
                 title: "Authorization bypass",
-                evidence: "The changed line grants access without checking a role.",
+                evidence: `The changed line grants access without checking a role. ${fineGrainedToken}`,
                 recommendation: "Check the authorized role before granting access.",
               },
               {
@@ -83,6 +86,7 @@ test("AI findings must point to changed lines and failed calls are not clean rev
   assert.equal(result.state, "partial");
   assert.equal(result.findings.length, 1);
   assert.equal(result.findings[0]?.line, 3);
+  assert.equal(JSON.stringify(result).includes(fineGrainedToken), false);
 
   const failing = {
     responses: {

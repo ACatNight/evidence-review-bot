@@ -154,6 +154,26 @@ test("Chinese Gitee report is partial and publication reuses its marker", async 
   assert.equal(posts, 1);
 });
 
+test("Chinese report names fine-grained tokens without exposing candidate values", () => {
+  const syntheticToken = `github_pat_${"A".repeat(82)}`;
+  const body = giteeReportText(snapshot, {
+    ...report,
+    findings: [
+      {
+        path: "src/config.ts",
+        startLine: 2,
+        endLine: 2,
+        kind: "github_fine_grained_token",
+        redactedExcerpt: "[REDACTED GITHUB TOKEN]",
+        hmacFingerprint: "f".repeat(64),
+      },
+    ],
+  });
+  assert.match(body, /GitHub 精细化访问令牌/);
+  assert.equal(body.includes(syntheticToken), false);
+  assert.equal(body.includes("f".repeat(64)), false);
+});
+
 const connectionString = process.env.TEST_DATABASE_URL;
 test("Gitee Webhook route rejects invalid signatures and deduplicates events", {
   skip: !connectionString,

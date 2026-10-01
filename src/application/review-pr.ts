@@ -135,7 +135,7 @@ export function checkOutput(
     " Neither check proves the PR is safe.";
   const lines = [
     `Commit: \`${headSha}\``,
-    `Rule: SEC-001 v${report.ruleVersion} (GitHub classic token and supported PEM private key formats).`,
+    `Rule: SEC-001 v${report.ruleVersion} (GitHub classic and fine-grained token formats; supported PEM private key formats).`,
     "",
   ];
   if (findings.length > 0) {

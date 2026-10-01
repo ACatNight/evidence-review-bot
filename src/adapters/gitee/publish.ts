@@ -1,4 +1,5 @@
 import type { ReviewReport } from "../../application/review-pr.js";
+import type { SecretKind } from "../../rules/secret.js";
 import type { PullRequestSnapshot } from "../github/snapshot.js";
 import { type GiteeClient, giteeInteger, giteeObject } from "./client.js";
 import type { GiteeRepository } from "./snapshot.js";
@@ -25,6 +26,12 @@ const severityText: Record<string, string> = {
   critical: "严重",
 };
 
+const secretKindText: Record<SecretKind, string> = {
+  github_classic_token: "GitHub 经典令牌",
+  github_fine_grained_token: "GitHub 精细化访问令牌",
+  pem_private_key: "私钥",
+};
+
 export function giteeReportText(snapshot: PullRequestSnapshot, report: ReviewReport): string {
   const { coverage, findings, aiReview } = report;
   const lines = [
@@ -39,7 +46,7 @@ export function giteeReportText(snapshot: PullRequestSnapshot, report: ReviewRep
     lines.push("### 确定性发现", "");
     for (const finding of findings.slice(0, 20)) {
       lines.push(
-        `- \`${display(finding.path)}:${finding.startLine}-${finding.endLine}\`：疑似${finding.kind === "github_classic_token" ? "GitHub 令牌" : "私钥"}，${display(finding.redactedExcerpt, 300)}。如为真实凭据，请撤销或轮换。`,
+        `- \`${display(finding.path)}:${finding.startLine}-${finding.endLine}\`：疑似${secretKindText[finding.kind]}，${display(finding.redactedExcerpt, 300)}。如为真实凭据，请撤销或轮换。`,
       );
     }
     if (findings.length > 20) lines.push(`- 另有 ${findings.length - 20} 项未展开。`);

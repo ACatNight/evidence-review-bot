@@ -85,7 +85,7 @@ npm run inspect:queue
 
 本机首次联调已在 `D:\Tools\evidence-review-bot\review-hmac-key.txt` 创建主密钥。其他部署须自行生成至少 32 字节随机密钥并安全保存，不要每次启动时重新生成。`inspect:queue` 只读，显示最近 10 次投递、任务状态、Check 发布状态和失败代码，不输出 Webhook 请求体或密钥。`published` 表示 GitHub 已返回 Check ID；`uncertain` 表示发布结果不确定，需要核对远端后处理，不能盲目重复创建。
 
-默认的 Bot 报告仅覆盖 SEC-001 列出的 GitHub 经典令牌和 PEM 私钥格式；不验证凭据有效性，不代表代码安全。对缺失 patch、读取失败、超限或超过 50 个文件的 PR，会在报告中标出覆盖缺口。Check 使用 `neutral` 结论，不设置为 required check。反馈、抑制、确定性回放和更完整的发布对账仍待实现。
+默认的 Bot 报告仅覆盖 SEC-001 列出的 GitHub 经典令牌、fine-grained PAT 和 PEM 私钥格式；不验证凭据有效性，不代表代码安全。对缺失 patch、读取失败、超限或超过 50 个文件的 PR，会在报告中标出覆盖缺口。Check 使用 `neutral` 结论，不设置为 required check。反馈、抑制、确定性回放和更完整的发布对账仍待实现。
 
 ## 可选 OpenAI 安全审查
 

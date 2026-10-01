@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
 import { z } from "zod";
+import { githubFineGrainedTokenPattern } from "../../rules/secret.js";
 import type { PullRequestSnapshot } from "../github/snapshot.js";
 
 const MAX_FILES = 8;
@@ -59,6 +60,7 @@ export const AI_NOT_RUN: AiReview = {
 function redact(text: string): string {
   return text
     .replace(/gh[pousr]_[A-Za-z0-9]{36}/g, "[REDACTED GITHUB TOKEN]")
+    .replace(githubFineGrainedTokenPattern, "[REDACTED GITHUB TOKEN]")
     .replace(/\bsk-[A-Za-z0-9_-]{20,}\b/g, "[REDACTED API KEY]")
     .replace(/\bAKIA[0-9A-Z]{16}\b/g, "[REDACTED ACCESS KEY]")
     .replace(
