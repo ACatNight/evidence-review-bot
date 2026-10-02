@@ -24,9 +24,9 @@
 <p align="center">
   <a href="#快速体验">快速体验</a> ·
   <a href="#当前能力">当前能力</a> ·
-  <a href="docs/community-onboarding.md">接入指南</a> ·
-  <a href="docs/architecture.md">架构设计</a> ·
-  <a href="docs/roadmap.md">路线图</a>
+  <a href="#接入真实-pr">接入指南</a> ·
+  <a href="#开发与验证">本地开发</a> ·
+  <a href="#参与项目">参与项目</a>
 </p>
 
 ---
@@ -72,7 +72,7 @@ npm run demo:report -- github
 npm run demo:report -- gitee
 ```
 
-这两个命令生成**离线合成报告**：不读取真实仓库代码，不执行扫描，不连接数据库或模型，也不会发布评论。报告展示候选问题、审查覆盖率、未检查范围和未运行的检查；不能用来判断检测准确率。真实接入请从[社区上手指南](docs/community-onboarding.md)开始。
+这两个命令生成**离线合成报告**：不读取真实仓库代码，不执行扫描，不连接数据库或模型，也不会发布评论。报告展示候选问题、审查覆盖率、未检查范围和未运行的检查；不能用来判断检测准确率。真实接入请按下方的[接入步骤](#接入真实-pr)操作。
 
 ## 当前能力
 
@@ -80,13 +80,13 @@ npm run demo:report -- gitee
 | --- | --- | --- |
 | GitHub PR 自动审查 | 已实现测试仓库链路 | GitHub App Webhook、固定 SHA 快照、Check 汇总 |
 | Gitee PR 自动审查 | 已实现测试仓库链路 | 仓库 WebHook、固定 SHA 快照、中文 PR 评论报告 |
-| 确定性规则 SEC-001 | 已实现 | 仅匹配[列出的 GitHub Token 与 PEM 格式](docs/sec-001-implementation.md)；不验证凭据有效性 |
+| 确定性规则 SEC-001 | 已实现 | 仅匹配指定 GitHub Token 与 PEM 格式；不验证凭据有效性 |
 | AI 安全审查 | 可选，默认关闭 | 仅对授权仓库发送尽力脱敏的变更代码；输出是待人工核实的候选 |
 | 审查覆盖率 | 已显示 | 区分已检查、部分完成和未运行；覆盖率不是安全评分或检出率 |
 | Lint、构建、测试、依赖审计 | 机器人尚未执行 | 本仓库的 CI 独立运行这些检查，结果不代表目标 PR 已被机器人检查 |
 | GitLab、反馈、抑制、回放、完整审计 | 规划中 | 当前没有可供用户启用的实现 |
 
-**零条候选不等于代码安全。** 文件读取失败、超出限制、AI 调用失败和未运行的检查会在报告中体现。SEC-001 也不是通用 Secret 扫描器；规则的格式和漏报边界见[实现说明](docs/sec-001-implementation.md)。
+**零条候选不等于代码安全。** 文件读取失败、超出限制、AI 调用失败和未运行的检查会在报告中体现。SEC-001 目前识别 GitHub 经典令牌、fine-grained PAT 和部分 PEM 私钥格式，仅报告涉及本次变更行的候选；其他服务密钥、普通密码和复杂 PEM 变体可能漏报。完整匹配条件见[规则实现](src/rules/secret.ts)。
 
 ## 工作方式
 
@@ -102,17 +102,38 @@ flowchart LR
     G --> H[GitHub Check / Gitee 中文评论]
 ```
 
-平台接入、任务处理和报告发布分别实现；领域契约与覆盖计算位于 `src/domain/`，规则位于 `src/rules/`。报告绑定具体提交，并在发布前核对 PR 状态，避免把旧快照的结果误当成当前结果。架构细节见[架构设计](docs/architecture.md)与[数据模型](docs/data-model.md)。
+平台接入、任务处理和报告发布分别实现；领域契约与覆盖计算位于 `src/domain/`，规则位于 `src/rules/`。报告绑定具体提交，并在发布前核对 PR 状态，避免把旧快照的结果误当成当前结果。
 
 ## 接入真实 PR
 
 当前可操作的部署路径是 **Windows 本机试点**。需要 PostgreSQL、Node.js、可供平台访问的 HTTPS Webhook 地址，以及所选平台的授权资料。首次配置后，脚本可构建、迁移并启动 API 与 Worker；它不会代建平台应用、数据库或公网入口。Docker Compose、跨平台安装器和管理界面尚未提供。
 
-1. 按[Windows 部署说明](docs/deployment-windows.md)准备环境，并将密钥文件保存在仓库外。
-2. 选择平台：[GitHub App 联调](docs/local-development.md)或[Gitee 仓库接入](docs/gitee-setup.md)。当前启动脚本和 Worker 仍要求 GitHub App 配置，**仅接 Gitee 的部署尚不能独立完成**。
-3. 用测试 PR 验证 Webhook 投递、任务执行和报告发布；不要只依据服务健康检查判断接入成功。具体验收步骤见[社区上手指南](docs/community-onboarding.md)。
+准备以下资料，并将密钥文件保存在仓库外：
 
-AI 审查需要单独配置模型服务、密钥文件和允许传输代码的仓库清单。启用外部服务前，请确认仓库代码允许发送到该服务；数据处理边界见[安全说明](docs/security.md)。
+| 配置 | 需要填写 |
+| --- | --- |
+| 数据库 | 已创建的 PostgreSQL 数据库连接地址，以及单独保存的密码文件 |
+| GitHub App | App ID、私钥文件、与平台一致的 Webhook Secret 文件 |
+| Review HMAC | 至少 32 字节随机密钥的十六进制文件内容，启动时保持不变 |
+| 公网入口 | HTTPS 地址；使用 ngrok 时另填客户端路径、固定域名和令牌文件 |
+| Gitee（可选） | 私人令牌文件、仓库所有者与名称、数字 ID、Webhook 密钥文件 |
+
+在仓库根目录运行配置向导，再启动服务：
+
+```powershell
+powershell -NoProfile -File .\scripts\configure-windows.ps1
+powershell -NoProfile -File .\scripts\start-windows.ps1
+```
+
+配置保存在仓库外，仅记录密钥路径。需要更改保存目录时，先设置 `EVIDENCE_REVIEW_BOT_HOME`。停止服务使用 `powershell -NoProfile -File .\scripts\stop-windows.ps1`。
+
+GitHub App 需安装到目标仓库，仓库权限设置为 `Contents: Read-only`、`Pull requests: Read-only`、`Checks: Read and write`，订阅 `Pull request` 事件，回调地址填写 `https://你的域名/webhooks/github`。
+
+Gitee 在目标仓库「管理 → WebHooks」订阅 Pull Request，地址填写 `https://你的域名/webhooks/gitee`，优先选择签名密钥方式；私人令牌需能读取仓库和发布 PR 评论。当前启动脚本和 Worker 仍要求 GitHub App 配置，**仅接 Gitee 的部署尚不能独立完成**。
+
+启动后检查 `/healthz`，再创建测试 PR，依次确认平台投递记录、任务执行和报告发布。本机及公网入口需要持续运行，关机后自动审查停止。
+
+AI 审查可在配置向导中单独开启，需要模型服务、密钥文件和允许传输代码的仓库清单。代码仅做尽力脱敏，启用前应确认允许发送到所选服务；模型输出仍需人工核实。
 
 ## 开发与验证
 
@@ -123,20 +144,7 @@ npm run check
 npm test
 ```
 
-`npm test` 会构建项目并运行测试；部分集成测试需要测试用 PostgreSQL，配置见[本地开发说明](docs/local-development.md)。本仓库的 GitHub Actions 还运行 npm 依赖审计和 CodeQL。这些是**项目自身的质量检查**，不是对接入仓库的 PR 执行的检查。
-
-## 文档
-
-| 从这里开始 | 适合了解 |
-| --- | --- |
-| [社区上手指南](docs/community-onboarding.md) | 先试读报告，再完成测试仓库联调 |
-| [Windows 部署](docs/deployment-windows.md) · [Gitee 接入](docs/gitee-setup.md) | 环境准备、平台配置与真实投递验证 |
-| [产品与范围](docs/product.md) · [路线图](docs/roadmap.md) | 目标用户、阶段边界和待完成工作 |
-| [架构设计](docs/architecture.md) · [平台接入](docs/platforms.md) | 模块职责、平台适配和发布流程 |
-| [SEC-001 边界](docs/sec-001-implementation.md) · [安全与数据处理](docs/security.md) | 规则支持范围、密钥与外部模型数据边界 |
-| [竞品与差异化](docs/competition.md) · [评估方案](docs/evaluation.md) | 已知能力重叠、需要实测验证的产品假设 |
-
-更多设计细节见 [`docs/`](docs/)。
+`npm test` 会构建项目并运行测试；数据库集成测试需设置 `TEST_DATABASE_URL`，指向名为 `evidence_review_bot_test` 的专用 PostgreSQL 数据库。测试会清理该库的测试数据，请勿使用业务数据库。本仓库的 GitHub Actions 还运行 npm 依赖审计和 CodeQL。这些是**项目自身的质量检查**，不是对接入仓库的 PR 执行的检查。
 
 ## 参与项目
 
