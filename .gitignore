@@ -5,3 +5,13 @@ coverage/
 .env.*
 !.env.example
 *.log
+
+# Local working notes and assistant configuration
+/.local-notes/
+/.codex/
+/.claude/
+/.agents/
+/.cursor/
+AGENTS.md
+CLAUDE.md
+GEMINI.md
