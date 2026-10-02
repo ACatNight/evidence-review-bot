@@ -1,77 +1,94 @@
 # Evidence Review Bot
 
-开放、平台无关的 PR Review Engine，以确定性检查和可验证证据支持审查决策。
+**面向 Pull Request 的开源审查引擎：从可重复的规则出发，记录证据与覆盖范围，按需使用 AI 辅助分析。**
 
-**当前状态：GitHub Webhook、固定 SHA 的 PR 快照、SEC-001 候选扫描和 Check 汇总已接通；Gitee 已配置仓库可接收 Webhook、读取固定 SHA 快照并发布中文 PR 评论报告。可选 OpenAI 安全审查默认关闭；GitHub PR 工作流另跑 Lint、类型检查、测试、npm 依赖审计和 CodeQL。反馈、抑制、回放和完整审计仍未实现；当前只适合测试仓库联调。**
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
+[![Code quality and dependency audit](https://github.com/ACatNight/evidence-review-bot/actions/workflows/quality.yml/badge.svg?branch=github)](https://github.com/ACatNight/evidence-review-bot/actions/workflows/quality.yml)
 
-项目希望减少没有依据的审查评论：先使用可验证的规则发现问题，再按需获取上下文和调用模型，并把每项结论绑定到具体代码快照、规则版本和证据来源。
+Evidence Review Bot 接收平台的 PR 事件，读取固定提交的变更快照，执行审查，并将结果发布回代码托管平台。报告会说明**检查了什么、发现了什么、哪些范围没有完成**。项目正在测试仓库阶段，适合评估报告方式和联调流程；检测效果与生产运行能力尚未经过充分验证。
 
-## 第一次使用
+## 快速体验
 
-想先看报告是什么样，不必创建 GitHub App、数据库或模型密钥。安装依赖后运行：
+无需数据库、平台账号或 AI 密钥，就能先查看报告格式。需要 Node.js **22.22.2** 和 npm：
 
-```text
+```bash
+git clone --branch github https://github.com/ACatNight/evidence-review-bot.git
+cd evidence-review-bot
 npm ci
 npm run demo:report -- github
 npm run demo:report -- gitee
 ```
 
-这是**离线合成示例**，只展示实际报告渲染格式，不执行扫描，也不证明产品准确率。准备在测试仓库接入自动审查时，按[社区用户上手路径](docs/community-onboarding.md)逐步核验服务、公网入口、平台投递、任务与发布。当前可操作的部署说明主要针对 Windows 本机；Docker Compose、跨平台一键安装和管理界面尚未提供。
+这两个命令生成**离线合成报告**：不读取真实仓库代码，不执行扫描，不连接数据库或模型，也不会发布评论。报告展示候选问题、审查覆盖率、未检查范围和未运行的检查；不能用来判断检测准确率。真实接入请从[社区上手指南](docs/community-onboarding.md)开始。
 
-GitHub、Gitee、GitLab 接入属于平台兼容性。自托管、自选模型和团队规范属于部署与扩展能力。我们希望验证的价值是：在保留有用发现的同时减少无用评论，让维护者能够核查、反馈并回顾每次审查决策。当前尚无对照数据证明产品优于现有工具。
+## 当前能力
 
-## 推荐首版
+| 能力 | 当前状态 | 边界 |
+| --- | --- | --- |
+| GitHub PR 自动审查 | 已实现测试仓库链路 | GitHub App Webhook、固定 SHA 快照、Check 汇总 |
+| Gitee PR 自动审查 | 已实现测试仓库链路 | 仓库 WebHook、固定 SHA 快照、中文 PR 评论报告 |
+| 确定性规则 SEC-001 | 已实现 | 仅匹配[列出的 GitHub Token 与 PEM 格式](docs/sec-001-implementation.md)；不验证凭据有效性 |
+| AI 安全审查 | 可选，默认关闭 | 仅对授权仓库发送尽力脱敏的变更代码；输出是待人工核实的候选 |
+| 审查覆盖率 | 已显示 | 区分已检查、部分完成和未运行；覆盖率不是安全评分或检出率 |
+| Lint、构建、测试、依赖审计 | 机器人尚未执行 | 本仓库的 CI 独立运行这些检查，结果不代表目标 PR 已被机器人检查 |
+| GitLab、反馈、抑制、回放、完整审计 | 规划中 | 当前没有可供用户启用的实现 |
 
-- GitHub App，自托管部署，单仓库闭环后再验证多个安装之间的隔离。
-- 以 JavaScript / TypeScript、npm 为试点生态；这是可调整的设计默认，尚未由试点需求验证。
-- 首版仅实现高精度 Secret 检测；锁文件已知漏洞匹配安排在 M3。
-- Check 汇总优先，逐行评论经准确率与定位验证后按配置开启。
-- LLM 后续先以静默模式评估；关闭 LLM 时仍可完成基础审查。
+**零条候选不等于代码安全。** 文件读取失败、超出限制、AI 调用失败和未运行的检查会在报告中体现。SEC-001 也不是通用 Secret 扫描器；规则的格式和漏报边界见[实现说明](docs/sec-001-implementation.md)。
 
-## 文档导航
+## 工作方式
 
-| 文档 | 内容 |
+```mermaid
+flowchart LR
+    A[GitHub App / Gitee WebHook] --> B[平台适配器]
+    B --> C[固定 SHA 的 PR 快照]
+    C --> D[审查引擎]
+    D --> E[确定性规则]
+    D --> F[可选 AI 分析]
+    E --> G[候选、证据与覆盖状态]
+    F --> G
+    G --> H[GitHub Check / Gitee 中文评论]
+```
+
+平台接入、任务处理和报告发布分别实现；领域契约与覆盖计算位于 `src/domain/`，规则位于 `src/rules/`。报告绑定具体提交，并在发布前核对 PR 状态，避免把旧快照的结果误当成当前结果。架构细节见[架构设计](docs/architecture.md)与[数据模型](docs/data-model.md)。
+
+## 接入真实 PR
+
+当前可操作的部署路径是 **Windows 本机试点**。需要 PostgreSQL、Node.js、可供平台访问的 HTTPS Webhook 地址，以及所选平台的授权资料。首次配置后，脚本可构建、迁移并启动 API 与 Worker；它不会代建平台应用、数据库或公网入口。Docker Compose、跨平台安装器和管理界面尚未提供。
+
+1. 按[Windows 部署说明](docs/deployment-windows.md)准备环境，并将密钥文件保存在仓库外。
+2. 选择平台：[GitHub App 联调](docs/local-development.md)或[Gitee 仓库接入](docs/gitee-setup.md)。当前启动脚本和 Worker 仍要求 GitHub App 配置，**仅接 Gitee 的部署尚不能独立完成**。
+3. 用测试 PR 验证 Webhook 投递、任务执行和报告发布；不要只依据服务健康检查判断接入成功。具体验收步骤见[社区上手指南](docs/community-onboarding.md)。
+
+AI 审查需要单独配置模型服务、密钥文件和允许传输代码的仓库清单。启用外部服务前，请确认仓库代码允许发送到该服务；数据处理边界见[安全说明](docs/security.md)。
+
+## 开发与验证
+
+```bash
+npm ci
+npm run lint
+npm run check
+npm test
+```
+
+`npm test` 会构建项目并运行测试；部分集成测试需要测试用 PostgreSQL，配置见[本地开发说明](docs/local-development.md)。本仓库的 GitHub Actions 还运行 npm 依赖审计和 CodeQL。这些是**项目自身的质量检查**，不是对接入仓库的 PR 执行的检查。
+
+## 文档
+
+| 从这里开始 | 适合了解 |
 | --- | --- |
-| [产品与范围](docs/product.md) | 目标用户、首版边界、成功指标 |
-| [社区用户上手路径](docs/community-onboarding.md) | 离线试读、测试仓库验收与待补齐的安装体验 |
-| [首版实施基线](docs/mvp.md) | 统一范围、默认行为与 A01–A12 验收 |
-| [竞品与差异化](docs/competition.md) | Gitee AI、CodeRabbit、Semgrep、PR-Agent 的已知重叠与待验证价值 |
-| [回放、审计与评估](docs/evaluation.md) | 证据验证、无副作用回放、对照试验和反馈校准 |
-| [架构设计](docs/architecture.md) | 模块、进程、任务执行、发布一致性 |
-| [数据模型](docs/data-model.md) | 快照、运行、Finding、Evidence、发布记录 |
-| [平台接入](docs/platforms.md) | 平台能力、授权、diff 定位与降级 |
-| [规则契约](docs/rules.md) | 三条候选规则、抑制、覆盖范围、测试约束 |
-| [SEC-001 当前实现边界](docs/sec-001-implementation.md) | 已支持格式、漏报边界与接入前验证 |
-| [本地开发与数据库验证](docs/local-development.md) | D 盘 PostgreSQL 实例、迁移与集成测试 |
-| [Windows 快速部署](docs/deployment-windows.md) | 首次填写配置，之后一条命令启动或停止 |
-| [Gitee 测试仓库接入](docs/gitee-setup.md) | 令牌、Webhook 签名和中文 PR 报告验收 |
-| [安全与数据处理](docs/security.md) | 信任边界、脱敏、访问隔离、留存 |
-| [架构决策记录](docs/decisions.md) | 推荐方案、取舍、待验证问题 |
-| [实施路线](docs/roadmap.md) | 阶段交付、验收、试点门槛 |
+| [社区上手指南](docs/community-onboarding.md) | 先试读报告，再完成测试仓库联调 |
+| [Windows 部署](docs/deployment-windows.md) · [Gitee 接入](docs/gitee-setup.md) | 环境准备、平台配置与真实投递验证 |
+| [产品与范围](docs/product.md) · [路线图](docs/roadmap.md) | 目标用户、阶段边界和待完成工作 |
+| [架构设计](docs/architecture.md) · [平台接入](docs/platforms.md) | 模块职责、平台适配和发布流程 |
+| [SEC-001 边界](docs/sec-001-implementation.md) · [安全与数据处理](docs/security.md) | 规则支持范围、密钥与外部模型数据边界 |
+| [竞品与差异化](docs/competition.md) · [评估方案](docs/evaluation.md) | 已知能力重叠、需要实测验证的产品假设 |
 
-建议阅读顺序：首版实施基线 → 架构设计 → 数据模型 → 实施路线。竞争定位与试点评估分别见对应文档。
+更多设计细节见 [`docs/`](docs/)。
 
-## 本地验证
+## 参与项目
 
-Windows 本机部署先运行 `powershell -NoProfile -File .\scripts\configure-windows.ps1` 填写一次路径和参数，之后运行 `powershell -NoProfile -File .\scripts\start-windows.ps1` 启动 API 与 Worker。停止使用 `powershell -NoProfile -File .\scripts\stop-windows.ps1`。需要 Node.js、PostgreSQL 和可到达本机 API 的 HTTPS Webhook 地址，详见[快速部署](docs/deployment-windows.md)。
+欢迎通过 Issue 提供可复现的错误、部署问题和测试仓库反馈。提交代码前请运行上面的本地检查；涉及检测规则的改动应同时说明正例、反例、误报边界和覆盖变化。安全问题请避免在公开 Issue 中粘贴真实凭据或私有代码。
 
-需要 Node.js 22.22.2 和 npm。执行 `npm ci` 安装锁定依赖，`npm run check` 做类型检查，`npm test` 编译并运行测试。`src/domain/` 包含平台无关契约、覆盖汇总与证据图校验；`src/rules/secret.ts` 包含仅支持明确格式的 Secret 候选检测器。测试位于 `test/`。
+## 许可证
 
-`npm run db:migrate` 应用数据库迁移，`npm run start:api` 启动 Webhook 接收 API，`npm run start:worker` 处理任务并发布 Check，`npm run inspect:queue` 查看任务与发布状态。OpenAI 密钥、仓库白名单及本地 GitHub App 联调步骤见[本地开发说明](docs/local-development.md)。
-
-## 设计原则
-
-1. 可重复执行的规则也可能误报；每条规则都需要正例、反例与回归集。
-2. 证据来源、工具推导和风险解释分别记录；模型输出不能充当已观察事实。
-3. 每次分析绑定不可变代码快照；发布时核对当前 PR，保留过期与部分覆盖状态。
-4. 检测到零条问题不等于扫描完整；失败、跳过和截断必须明确显示。
-5. Secret 在持久化、日志、平台输出和外部模型调用前脱敏。
-6. 先验证一个平台上的可靠闭环，再扩展平台、语言和 AI 能力。
-
-## 开发状态
-
-社区上手文档说明当前试点路径，但项目尚不是跨平台通用安装包，也未通过完整真实平台验收。技术栈、API 权限、容量预算和规则发布阈值的确认条件见[架构决策记录](docs/decisions.md)与[实施路线](docs/roadmap.md)。
-
-## License
-
-[Apache License 2.0](LICENSE)。第三方分析工具和漏洞数据仍需分别检查许可证、署名及再分发要求。
+本项目采用 [Apache License 2.0](LICENSE)。
