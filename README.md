@@ -6,6 +6,18 @@
 
 项目希望减少没有依据的审查评论：先使用可验证的规则发现问题，再按需获取上下文和调用模型，并把每项结论绑定到具体代码快照、规则版本和证据来源。
 
+## 第一次使用
+
+想先看报告是什么样，不必创建 GitHub App、数据库或模型密钥。安装依赖后运行：
+
+```text
+npm ci
+npm run demo:report -- github
+npm run demo:report -- gitee
+```
+
+这是**离线合成示例**，只展示实际报告渲染格式，不执行扫描，也不证明产品准确率。准备在测试仓库接入自动审查时，按[社区用户上手路径](docs/community-onboarding.md)逐步核验服务、公网入口、平台投递、任务与发布。当前可操作的部署说明主要针对 Windows 本机；Docker Compose、跨平台一键安装和管理界面尚未提供。
+
 GitHub、Gitee、GitLab 接入属于平台兼容性。自托管、自选模型和团队规范属于部署与扩展能力。我们希望验证的价值是：在保留有用发现的同时减少无用评论，让维护者能够核查、反馈并回顾每次审查决策。当前尚无对照数据证明产品优于现有工具。
 
 ## 推荐首版
@@ -21,6 +33,7 @@ GitHub、Gitee、GitLab 接入属于平台兼容性。自托管、自选模型�
 | 文档 | 内容 |
 | --- | --- |
 | [产品与范围](docs/product.md) | 目标用户、首版边界、成功指标 |
+| [社区用户上手路径](docs/community-onboarding.md) | 离线试读、测试仓库验收与待补齐的安装体验 |
 | [首版实施基线](docs/mvp.md) | 统一范围、默认行为与 A01–A12 验收 |
 | [竞品与差异化](docs/competition.md) | Gitee AI、CodeRabbit、Semgrep、PR-Agent 的已知重叠与待验证价值 |
 | [回放、审计与评估](docs/evaluation.md) | 证据验证、无副作用回放、对照试验和反馈校准 |
@@ -57,7 +70,7 @@ Windows 本机部署先运行 `powershell -NoProfile -File .\scripts\configure-w
 
 ## 开发状态
 
-当前文档不是安装指南，也不表示已通过真实平台集成验证。技术栈、API 权限、容量预算和规则发布阈值的确认条件见[架构决策记录](docs/decisions.md)与[实施路线](docs/roadmap.md)。
+社区上手文档说明当前试点路径，但项目尚不是跨平台通用安装包，也未通过完整真实平台验收。技术栈、API 权限、容量预算和规则发布阈值的确认条件见[架构决策记录](docs/decisions.md)与[实施路线](docs/roadmap.md)。
 
 ## License
 

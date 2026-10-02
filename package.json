@@ -15,6 +15,7 @@
     "inspect:queue": "npm run build && node dist/src/entrypoints/inspect-queue.js",
     "gitee:review": "npm run build && node dist/src/entrypoints/gitee-review.js",
     "github:review": "npm run build && node dist/src/entrypoints/github-review.js",
+    "demo:report": "npm run build && node dist/src/entrypoints/demo-report.js",
     "check": "tsc -p tsconfig.json --noEmit",
     "lint": "biome check src test package.json tsconfig.json biome.json",
     "format": "biome check --write src test package.json tsconfig.json biome.json",
