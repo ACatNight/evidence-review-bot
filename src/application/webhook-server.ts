@@ -1,9 +1,22 @@
 import Fastify from "fastify";
 import type { Pool } from "pg";
+import {
+  parseGiteeWebhook,
+  verifyGiteeWebhook,
+  verifyGiteeWebhookToken,
+} from "../adapters/gitee/webhook.js";
 import { parsePullRequestWebhook, verifyWebhookSignature } from "../adapters/github/webhook.js";
 import { enqueueSnapshot } from "../adapters/postgres/jobs.js";
 
-export function createWebhookServer(pool: Pool, secret: string) {
+export function createWebhookServer(
+  pool: Pool,
+  secret: string,
+  gitee: readonly {
+    readonly secret: string;
+    readonly repositoryId: string;
+    readonly authMode?: "signature" | "token";
+  }[] = [],
+) {
   if (secret.length < 32) throw new Error("GITHUB_WEBHOOK_SECRET must be at least 32 characters");
   const app = Fastify({ bodyLimit: 1_048_576, logger: false });
   app.addContentTypeParser("application/json", { parseAs: "buffer" }, (_request, body, done) => {
@@ -58,6 +71,44 @@ export function createWebhookServer(pool: Pool, secret: string) {
       throw error;
     }
   });
+
+  if (gitee.length > 0) {
+    if (
+      gitee.some((entry) => entry.secret.length < 32 || !/^\d+$/.test(entry.repositoryId)) ||
+      new Set(gitee.map((entry) => entry.repositoryId)).size !== gitee.length
+    ) {
+      throw new Error("Invalid Gitee Webhook configuration");
+    }
+    app.post("/webhooks/gitee", async (request, reply) => {
+      const body = request.body;
+      if (!Buffer.isBuffer(body))
+        return reply.code(415).send({ error: "unsupported_content_type" });
+      const token = request.headers["x-gitee-token"];
+      const timestamp = request.headers["x-gitee-timestamp"];
+      const verified = gitee.find((entry) =>
+        entry.authMode === "token"
+          ? verifyGiteeWebhookToken(typeof token === "string" ? token : undefined, entry.secret)
+          : verifyGiteeWebhook(
+              typeof token === "string" ? token : undefined,
+              typeof timestamp === "string" ? timestamp : undefined,
+              entry.secret,
+            ),
+      );
+      if (!verified) {
+        return reply.code(401).send({ error: "invalid_signature" });
+      }
+      const event = request.headers["x-gitee-event"];
+      const parsed = parseGiteeWebhook(
+        body,
+        typeof event === "string" ? event : undefined,
+        verified.repositoryId,
+      );
+      if (parsed.kind === "invalid") return reply.code(400).send({ error: "invalid_event" });
+      if (parsed.kind === "ignored") return reply.code(202).send({ queued: false });
+      const queued = await enqueueSnapshot(pool, parsed.delivery);
+      return reply.code(202).send({ queued });
+    });
+  }
 
   return app;
 }

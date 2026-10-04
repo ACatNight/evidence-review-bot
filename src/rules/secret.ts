@@ -1,8 +1,8 @@
 import { createHmac } from "node:crypto";
 
-export const SECRET_RULE_VERSION = "0.1.0";
+export const SECRET_RULE_VERSION = "0.2.0";
 
-export type SecretKind = "github_classic_token" | "pem_private_key";
+export type SecretKind = "github_classic_token" | "github_fine_grained_token" | "pem_private_key";
 
 export interface SecretCandidate {
   readonly kind: SecretKind;
@@ -32,6 +32,8 @@ interface RawMatch {
 }
 
 const githubClassic = /\bgh[pousr]_[A-Za-z0-9]{36}\b/g;
+export const githubFineGrainedTokenPattern =
+  /(?<![A-Za-z0-9_])github_pat_[A-Za-z0-9_]{82}(?![A-Za-z0-9_])/g;
 const pemPrivateKey =
   /-----BEGIN ((?:RSA |EC |OPENSSH |ENCRYPTED )?PRIVATE KEY)-----\r?\n(?:[A-Za-z0-9+/=]{16,76}\r?\n){2,}-----END \1-----/g;
 
@@ -39,6 +41,14 @@ function* matches(text: string): Iterable<RawMatch> {
   for (const match of text.matchAll(githubClassic)) {
     yield {
       kind: "github_classic_token",
+      value: match[0],
+      start: match.index,
+      end: match.index + match[0].length,
+    };
+  }
+  for (const match of text.matchAll(githubFineGrainedTokenPattern)) {
+    yield {
+      kind: "github_fine_grained_token",
       value: match[0],
       start: match.index,
       end: match.index + match[0].length,

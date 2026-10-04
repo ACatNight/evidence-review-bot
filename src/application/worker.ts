@@ -1,5 +1,8 @@
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
+import { GiteeApiError, type GiteeClient } from "../adapters/gitee/client.js";
+import { publishGiteeReport } from "../adapters/gitee/publish.js";
+import { fetchGiteeSnapshot, type GiteeRepository } from "../adapters/gitee/snapshot.js";
 import { publishCheck } from "../adapters/github/checks.js";
 import { GitHubApiError, type GitHubClient } from "../adapters/github/client.js";
 import { fetchSnapshot } from "../adapters/github/snapshot.js";
@@ -21,9 +24,15 @@ import { reviewSnapshot } from "./review-pr.js";
 
 const LEASE_MS = 120_000;
 
+export interface GiteeWorkerConfig {
+  readonly client: GiteeClient;
+  readonly repository: GiteeRepository;
+}
+
 function failureCode(error: unknown): string {
   if (error instanceof GitHubApiError)
     return error.retryable ? "github_temporary" : "github_rejected";
+  if (error instanceof GiteeApiError) return error.retryable ? "gitee_temporary" : "gitee_rejected";
   if (error instanceof Error && error.name === "TimeoutError") return "github_timeout";
   return "worker_error";
 }
@@ -33,6 +42,7 @@ async function processJob(
   client: GitHubClient,
   masterHmacKey: Buffer,
   aiConfig: AiReviewConfig | null,
+  gitee: ReadonlyMap<string, GiteeWorkerConfig>,
   job: ClaimedJob,
   workerId: string,
 ): Promise<void> {
@@ -49,7 +59,13 @@ async function processJob(
   try {
     if (job.kind !== "snapshot") throw new Error("Unsupported job kind");
     const target = await snapshotTarget(pool, job);
-    const snapshot = await fetchSnapshot(client, target);
+    const giteeConfig = gitee.get(target.repositoryId);
+    if (target.provider === "gitee" && !giteeConfig)
+      throw new Error("Gitee worker is not configured for this repository");
+    const snapshot =
+      target.provider === "gitee" && giteeConfig
+        ? await fetchGiteeSnapshot(giteeConfig.client, giteeConfig.repository, target)
+        : await fetchSnapshot(client, target);
     if (leaseLost) return;
     if (!snapshot) {
       await completeJob(pool, job, workerId);
@@ -58,7 +74,10 @@ async function processJob(
     let stored = await getReport(pool, job.id);
     if (!stored) {
       const deterministic = reviewSnapshot(snapshot, masterHmacKey);
-      const aiReview = await reviewWithOpenAI(snapshot, aiConfig);
+      const aiReview = await reviewWithOpenAI(
+        snapshot,
+        aiConfig && target.provider === "gitee" ? { ...aiConfig, language: "zh-CN" } : aiConfig,
+      );
       const report = { ...deterministic, aiReview };
       if (!(await saveReport(pool, job, workerId, snapshot, report))) {
         stored = await getReport(pool, job.id);
@@ -81,7 +100,16 @@ async function processJob(
     }
     if (leaseLost) return;
     try {
-      const checkId = await publishCheck(client, snapshot, stored.report, allowCreate);
+      const checkId =
+        target.provider === "gitee" && giteeConfig
+          ? await publishGiteeReport(
+              giteeConfig.client,
+              giteeConfig.repository,
+              snapshot,
+              stored.report,
+              allowCreate,
+            )
+          : await publishCheck(client, snapshot, stored.report, allowCreate);
       if (checkId === null) {
         await transitionReport(pool, job, workerId, "publishing", "superseded");
       } else {
@@ -111,12 +139,13 @@ export async function runOneJob(
   client: GitHubClient,
   masterHmacKey: Buffer,
   aiConfig: AiReviewConfig | null = null,
+  gitee: ReadonlyMap<string, GiteeWorkerConfig> = new Map(),
   workerId = randomUUID(),
 ): Promise<boolean> {
   const jobs = await claimJobs(pool, workerId, 1, LEASE_MS);
   const job = jobs[0];
   if (!job) return false;
-  await processJob(pool, client, masterHmacKey, aiConfig, job, workerId);
+  await processJob(pool, client, masterHmacKey, aiConfig, gitee, job, workerId);
   const result = await pool.query<{ state: string; last_error_code: string | null }>(
     "SELECT state, last_error_code FROM review_bot.review_job WHERE id = $1",
     [job.id],

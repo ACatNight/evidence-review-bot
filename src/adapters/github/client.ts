@@ -126,6 +126,10 @@ export class GitHubClient {
     return value;
   }
 
+  async getApp(path: string): Promise<{ data: unknown; headers: Headers }> {
+    return this.request(path, appJwt(this.appId, this.privateKey));
+  }
+
   async get(installationId: string, path: string): Promise<{ data: unknown; headers: Headers }> {
     return this.request(path, await this.installationToken(installationId));
   }

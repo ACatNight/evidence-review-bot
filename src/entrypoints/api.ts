@@ -1,4 +1,5 @@
 import { Pool } from "pg";
+import { parseGiteeWebhookRepositories } from "../adapters/gitee/config.js";
 import { createWebhookServer } from "../application/webhook-server.js";
 
 const connectionString = process.env.DATABASE_URL;
@@ -11,7 +12,16 @@ if (!Number.isSafeInteger(port) || port < 1 || port > 65535)
   throw new Error("PORT must be 1-65535");
 const host = process.env.HOST ?? "127.0.0.1";
 const pool = new Pool({ connectionString });
-const app = createWebhookServer(pool, secret);
+const gitee = parseGiteeWebhookRepositories(process.env.GITEE_WEBHOOKS_JSON);
+const app = createWebhookServer(
+  pool,
+  secret,
+  gitee.map((repository) => ({
+    repositoryId: repository.id,
+    secret: repository.secret,
+    authMode: repository.authMode,
+  })),
+);
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.once(signal, () => {

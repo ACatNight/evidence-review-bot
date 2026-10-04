@@ -4,6 +4,7 @@ import { scanSecrets } from "../src/rules/secret.js";
 
 const key = Buffer.alloc(32, 7);
 const token = `ghp_${"A".repeat(36)}`;
+const fineGrainedToken = `github_pat_${"A".repeat(82)}`;
 
 function scan(headText: string, baseText = "", changedHeadLines = new Set([1, 2, 3, 4, 5])) {
   return scanSecrets({ headText, baseText, changedHeadLines, tenantHmacKey: key, maxBytes: 4096 });
@@ -26,6 +27,33 @@ test("ignores unchanged and moved candidate values", () => {
     [],
   );
   assert.deepEqual(scan(`const x = "${token}";`, "", new Set([2])).candidates, []);
+});
+
+test("detects only complete fine-grained GitHub token formats", () => {
+  const result = scan(`const credential = "${fineGrainedToken}";`);
+  assert.equal(result.state, "complete");
+  if (result.state !== "complete") return;
+  assert.equal(result.candidates.length, 1);
+  assert.equal(result.candidates[0]?.kind, "github_fine_grained_token");
+  assert.equal(result.candidates[0]?.redactedExcerpt, "[REDACTED GITHUB TOKEN]");
+  assert.equal(JSON.stringify(result).includes(fineGrainedToken), false);
+
+  for (const value of [
+    `github_pat_${"A".repeat(81)}`,
+    `${fineGrainedToken}A`,
+    `_${fineGrainedToken}`,
+    `${fineGrainedToken}_`,
+    "github_pat_example",
+  ]) {
+    assert.deepEqual(scan(`const credential = "${value}";`).candidates, []);
+  }
+});
+
+test("fine-grained tokens already in the base or outside changed lines are ignored", () => {
+  const source = `const credential = "${fineGrainedToken}";`;
+  assert.deepEqual(scan(source, source).candidates, []);
+  assert.deepEqual(scan(`// moved\n${source}`, source, new Set([2])).candidates, []);
+  assert.deepEqual(scan(source, "", new Set([2])).candidates, []);
 });
 
 test("reports multiline PEM candidates when a changed line intersects the block", () => {

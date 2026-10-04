@@ -1,9 +1,11 @@
 import { readFile } from "node:fs/promises";
 import { setTimeout as delay } from "node:timers/promises";
 import { Pool } from "pg";
+import { GiteeClient } from "../adapters/gitee/client.js";
+import { parseGiteeWorkerRepositories } from "../adapters/gitee/config.js";
 import { GitHubClient } from "../adapters/github/client.js";
 import type { AiReviewConfig } from "../adapters/openai/security-review.js";
-import { runOneJob } from "../application/worker.js";
+import { type GiteeWorkerConfig, runOneJob } from "../application/worker.js";
 
 const connectionString = process.env.DATABASE_URL;
 const appId = process.env.GITHUB_APP_ID;
@@ -20,6 +22,13 @@ if (!/^\d+$/.test(appId) || !/^[a-f0-9]{64,}$/i.test(hmacHex) || hmacHex.length 
 
 const privateKey = await readFile(privateKeyPath, "utf8");
 const client = new GitHubClient(appId, privateKey);
+const gitee = new Map<string, GiteeWorkerConfig>();
+for (const repository of parseGiteeWorkerRepositories(process.env.GITEE_REPOSITORIES_JSON)) {
+  gitee.set(repository.id, {
+    client: new GiteeClient(repository.token),
+    repository: { owner: repository.owner, name: repository.name, id: repository.id },
+  });
+}
 let aiConfig: AiReviewConfig | null = null;
 if (process.env.OPENAI_REVIEW_ENABLED === "true") {
   const apiKey = process.env.OPENAI_API_KEY;
@@ -31,9 +40,9 @@ if (process.env.OPENAI_REVIEW_ENABLED === "true") {
       "OPENAI_API_KEY, OPENAI_MODEL and OPENAI_ALLOWED_REPOSITORIES are required when AI review is enabled",
     );
   }
-  const allowedRepositoryIds = new Set(repositories.split(",").map((value) => value.trim()));
-  if ([...allowedRepositoryIds].some((value) => !/^\d+$/.test(value))) {
-    throw new Error("OPENAI_ALLOWED_REPOSITORIES must contain numeric GitHub repository IDs");
+  const allowedRepositories = new Set(repositories.split(",").map((value) => value.trim()));
+  if ([...allowedRepositories].some((value) => !/^(github|gitee):\d+$/.test(value))) {
+    throw new Error("OPENAI_ALLOWED_REPOSITORIES must contain provider-prefixed repository IDs");
   }
   if (baseURL) {
     let url: URL;
@@ -48,7 +57,7 @@ if (process.env.OPENAI_REVIEW_ENABLED === "true") {
       );
     }
   }
-  aiConfig = { apiKey, model, ...(baseURL ? { baseURL } : {}), allowedRepositoryIds };
+  aiConfig = { apiKey, model, ...(baseURL ? { baseURL } : {}), allowedRepositories };
 }
 const pool = new Pool({ connectionString });
 let stopping = false;
@@ -59,7 +68,7 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
 }
 try {
   do {
-    const worked = await runOneJob(pool, client, Buffer.from(hmacHex, "hex"), aiConfig);
+    const worked = await runOneJob(pool, client, Buffer.from(hmacHex, "hex"), aiConfig, gitee);
     if (process.argv.includes("--once")) break;
     if (!worked) await delay(3_000);
   } while (!stopping);

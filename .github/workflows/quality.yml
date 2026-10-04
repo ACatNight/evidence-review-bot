@@ -3,7 +3,7 @@ name: Code quality and dependency audit
 on:
   pull_request:
   push:
-    branches: [main, dev]
+    branches: [main, dev, github]
 
 permissions:
   contents: read
