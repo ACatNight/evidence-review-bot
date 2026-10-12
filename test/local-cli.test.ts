@@ -71,5 +71,5 @@ test("CLI distinguishes help, invalid arguments and invalid revisions", () => {
     encoding: "utf8",
   });
   assert.equal(revision.status, 4);
-  assert.match(revision.stderr, /snapshot could not be read/);
+  assert.match(revision.stderr, /Cannot resolve --base/);
 });

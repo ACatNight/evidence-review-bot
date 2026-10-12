@@ -23,6 +23,7 @@
 
 <p align="center">
   <a href="#快速体验">快速体验</a> ·
+  <a href="#本地审查">本地审查</a> ·
   <a href="#当前能力">当前能力</a> ·
   <a href="#接入真实-pr">接入指南</a> ·
   <a href="#开发与验证">本地开发</a> ·
@@ -74,19 +75,39 @@ npm run demo:report -- gitee
 
 这两个命令生成**离线合成报告**：不读取真实仓库代码，不执行扫描，不连接数据库或模型，也不会发布评论。报告展示候选问题、审查覆盖率、未检查范围和未运行的检查；不能用来判断检测准确率。真实接入请按下方的[接入步骤](#接入真实-pr)操作。
 
-## 当前能力
+## 本地审查
 
-本地 Git 扫描已提供，无需数据库或平台凭据。在安装依赖后运行：
+本地扫描需要 Git，无需数据库、平台账号或 AI 密钥。安装依赖后，在本工具目录运行；用 `--repo` 指定你自己的项目：
 
 ```bash
-npm run review -- scan --base HEAD~1 --head HEAD
-npm run review -- scan --base origin/main --format json --output review.json
-npm run review -- scan --base HEAD --head WORKTREE
+npm run review -- scan --repo ../my-project --staged
+npm run review -- scan --repo ../my-project --head WORKTREE
+npm run review -- scan --repo ../my-project --base origin/main --head HEAD
 ```
 
-提交比较使用 merge-base，工作区模式检查相对 base 的已跟踪或已暂存文件，未跟踪文件需先暂存。每次最多读取 50 个文件，每个文本文件最多 256 KB，超限范围标记为未完成。AI 默认不运行；该入口目前仅执行 SEC-001。
+| 使用场景 | 选项 | 实际读取内容 |
+| --- | --- | --- |
+| 提交前检查 | `--staged` | 暂存区相对 `HEAD` 的变化；之后的未暂存修改不参与 |
+| 开发中检查 | `--head WORKTREE` | 工作区相对 `HEAD` 的变化；只含已跟踪或已暂存文件 |
+| 分支比较 | `--base origin/main --head HEAD` | 从两个提交的 merge-base 到目标提交的变化 |
+
+未跟踪文件需先 `git add`。省略 `--repo` 时检查当前目录；省略所有范围选项时比较 `HEAD~1` 和 `HEAD`。首次提交之后可用 `--staged` 或 `--head WORKTREE`；尚无提交的空仓库需先创建初始提交。本地扫描只处理新增和修改文件，不处理删除文件。
+
+文本报告默认中文，用 `--lang en` 切换英文。导出 JSON 报告用于其他工具或 CI：
+
+```bash
+npm run --silent review -- scan --repo ../my-project --staged --format json --output reports/review.json
+```
+
+`--output` 相对**运行命令的目录**，会自动创建父目录；已有文件默认拒绝覆盖，确需替换时加 `--force`。省略 `--output` 时报告写入标准输出。使用 `npm run --silent review` 可避免 npm 提示混入 JSON，构建错误和运行诊断写入标准错误。重复扫描可先运行 `npm run build`，再直接调用 `node dist/src/entrypoints/cli.js scan ...`，省去每次构建。
+
+每次最多处理 50 个文件，每个文本文件最多 256 KB，超限范围标记为未完成。此入口仅执行 SEC-001，不调用模型、不启动目标项目的 Lint、构建或测试。扫描期间请避免同时修改工作区或暂存区，以免读取不同时间的内容。
 
 退出码：`0` 无候选（空范围会标记 `not_run`），`1` 有候选，`2` 参数错误，`3` 覆盖不完整，`4` 执行失败。只有已执行检查的范围可据此判断；返回 `0` 不代表代码安全。npm 包尚未发布，当前使用仓库内的命令入口。
+
+常见问题：找不到基准分支时先 `git fetch`；CI 中缺少共同历史时使用完整检出（例如 `fetch-depth: 0`）；存在合并冲突时先解决冲突并暂存。`npm run review -- --help` 可查看全部参数。
+
+## 当前能力
 
 | 能力 | 当前状态 | 边界 |
 | --- | --- | --- |
