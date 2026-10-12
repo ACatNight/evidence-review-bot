@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { demoProtocolReport } from "../src/examples/demo-report.js";
 import {
   parseReviewResult,
   type ReviewRequest,
@@ -79,6 +80,15 @@ test("protocol validates requests and round-trips JSON results", () => {
   assert.doesNotThrow(() => validateReviewResult(result));
   const encoded = serializeReviewResult(result);
   assert.deepEqual(parseReviewResult(encoded), result);
+});
+
+test("the existing review report maps to a valid protocol result", () => {
+  const mapped = parseReviewResult(demoProtocolReport("github"));
+  assert.equal(mapped.protocolVersion, "1.0");
+  assert.equal(mapped.status, "partial");
+  assert.equal(mapped.findings.length, 1);
+  assert.equal(mapped.findings[0]?.confidence, "deterministic");
+  assert.equal(mapped.coverage.checks.ai?.status, "partial");
 });
 
 test("protocol rejects incomplete coverage without a reason", () => {
