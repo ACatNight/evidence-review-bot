@@ -22,9 +22,12 @@
     "demo:protocol": "npm run build && node dist/src/entrypoints/demo-report.js json",
     "review": "npm run --silent build 1>&2 && node dist/src/entrypoints/cli.js",
     "check": "tsc -p tsconfig.json --noEmit",
-    "lint": "biome check src test package.json tsconfig.json biome.json",
-    "format": "biome check --write src test package.json tsconfig.json biome.json",
-    "test": "npm run build && node --test --test-concurrency=1 dist/test/*.test.js"
+    "lint": "biome lint src test package.json tsconfig.json biome.json",
+    "format:check": "biome format src test package.json tsconfig.json biome.json",
+    "format": "biome format --write src test package.json tsconfig.json biome.json",
+    "audit": "npm audit --package-lock-only --audit-level=high --registry=https://registry.npmjs.org",
+    "test": "npm run build && node --test --test-concurrency=1 dist/test/*.test.js",
+    "verify": "npm run format:check && npm run lint && npm run check && npm test"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.14",

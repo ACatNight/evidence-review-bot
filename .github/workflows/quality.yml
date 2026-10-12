@@ -5,12 +5,17 @@ on:
   push:
     branches: [main, dev, github]
 
+concurrency:
+  group: quality-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
 jobs:
   verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     services:
       postgres:
         image: postgres:18
@@ -34,18 +39,20 @@ jobs:
           node-version: 22.22.2
           cache: npm
       - run: npm ci --ignore-scripts
+      - run: npm run format:check
       - run: npm run lint
       - run: npm run check
       - run: npm test
 
   dependency-audit:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22.22.2
-      - run: npm audit --package-lock-only --registry=https://registry.npmjs.org --audit-level=high
+      - run: npm run audit
 
   codeql:
     runs-on: ubuntu-latest

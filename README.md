@@ -177,6 +177,8 @@ npm run check
 npm test
 ```
 
+一次性执行本地质量门禁可使用 `npm run verify`，它依次运行格式检查、Lint、类型检查和测试。依赖漏洞检查使用 `npm run audit`，只读取锁文件，不安装或执行项目脚本。
+
 `npm test` 会构建项目并运行测试；数据库集成测试需设置 `TEST_DATABASE_URL`，指向名为 `evidence_review_bot_test` 的专用 PostgreSQL 数据库。测试会清理该库的测试数据，请勿使用业务数据库。本仓库的 GitHub Actions 还运行 npm 依赖审计和 CodeQL。这些是**项目自身的质量检查**，不是对接入仓库的 PR 执行的检查。
 
 ## 参与项目
