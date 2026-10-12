@@ -76,6 +76,18 @@ npm run demo:report -- gitee
 
 ## 当前能力
 
+本地 Git 扫描已提供，无需数据库或平台凭据。在安装依赖后运行：
+
+```bash
+npm run review -- scan --base HEAD~1 --head HEAD
+npm run review -- scan --base origin/main --format json --output review.json
+npm run review -- scan --base HEAD --head WORKTREE
+```
+
+提交比较使用 merge-base，工作区模式检查相对 base 的已跟踪或已暂存文件，未跟踪文件需先暂存。每次最多读取 50 个文件，每个文本文件最多 256 KB，超限范围标记为未完成。AI 默认不运行；该入口目前仅执行 SEC-001。
+
+退出码：`0` 无候选（空范围会标记 `not_run`），`1` 有候选，`2` 参数错误，`3` 覆盖不完整，`4` 执行失败。只有已执行检查的范围可据此判断；返回 `0` 不代表代码安全。npm 包尚未发布，当前使用仓库内的命令入口。
+
 | 能力 | 当前状态 | 边界 |
 | --- | --- | --- |
 | GitHub PR 自动审查 | 已实现测试仓库链路 | GitHub App Webhook、固定 SHA 快照、Check 汇总 |

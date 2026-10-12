@@ -46,7 +46,7 @@ function deterministicFinding(
     finding.redactedExcerpt,
   );
   const rule: EvidenceNode = {
-    id: id("rule", `${finding.kind}:${ruleVersion}`),
+    id: id("rule", `${finding.kind}:${ruleVersion}:${source.id}`),
     kind: "rule",
     source: `SEC-001/${finding.kind}`,
     version: ruleVersion,
@@ -118,9 +118,9 @@ export function reviewReportToProtocolResult(
     evidence.push(source, model);
   }
   const aiStatus = checkStatus(report.aiReview.state);
-  const deterministicStatus = report.coverage.state === "complete" ? "complete" : "partial";
+  const deterministicStatus = report.coverage.state;
   const status =
-    report.coverage.state !== "complete" || aiStatus === "partial" || aiStatus === "error"
+    report.coverage.state === "partial" || aiStatus === "partial" || aiStatus === "error"
       ? "partial"
       : findings.length > 0
         ? "findings"
@@ -162,7 +162,7 @@ export function reviewReportToProtocolResult(
       },
     },
     findings,
-    evidence,
+    evidence: [...new Map(evidence.map((node) => [node.id, node])).values()],
     skipped: report.coverage.gaps.map((gap) => ({
       path: gap.path,
       check: "SEC-001",

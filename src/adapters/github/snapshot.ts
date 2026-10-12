@@ -21,7 +21,7 @@ export interface SnapshotFile {
 }
 
 export interface PullRequestSnapshot {
-  readonly provider: "github" | "gitee";
+  readonly provider: "github" | "gitee" | "local";
   readonly installationId: string;
   readonly repositoryId: string;
   readonly repositoryOwner: string;
