@@ -1,6 +1,8 @@
 import { giteeReportText } from "../adapters/gitee/publish.js";
 import type { PullRequestSnapshot } from "../adapters/github/snapshot.js";
 import { checkOutput, type ReviewReport } from "../application/review-pr.js";
+import { reviewReportToProtocolResult } from "../protocol/from-report.js";
+import { serializeReviewResult } from "../protocol/json.js";
 
 const exampleSha = "a".repeat(40);
 
@@ -67,4 +69,10 @@ export function demoReport(provider: "github" | "gitee"): string {
       ? "# 合成示例报告\n\n以下内容仅演示报告格式。没有读取仓库、调用模型或验证任何真实凭据。\n\n"
       : "# Synthetic example report\n\nThis only demonstrates the report format. No repository, model, or real credential was used.\n\n";
   return notice + rendered.replace(/\n\n<!-- evidence-review-bot:gitee:[^\n]* -->$/, "");
+}
+
+export function demoProtocolReport(provider: "github" | "gitee"): string {
+  return serializeReviewResult(
+    reviewReportToProtocolResult(exampleSnapshot(provider), exampleReport),
+  );
 }

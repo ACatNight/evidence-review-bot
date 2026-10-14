@@ -4,6 +4,7 @@ import { AI_NOT_RUN, type AiReview } from "../adapters/openai/security-review.js
 import { summarizeCoverage } from "../domain/coverage.js";
 import type { CoverageReason, CoverageState } from "../domain/review.js";
 import { SECRET_RULE_VERSION, type SecretKind, scanSecrets } from "../rules/secret.js";
+import { reportSummary } from "./report-summary.js";
 import { reviewCoverageTable } from "./review-coverage.js";
 
 export interface ReportFinding {
@@ -135,6 +136,7 @@ export function checkOutput(
       : ".") +
     " Neither check proves the PR is safe.";
   const lines = [
+    ...reportSummary(report, "en"),
     `Commit: \`${headSha}\``,
     "",
     ...reviewCoverageTable(report, "en"),
