@@ -13,6 +13,6 @@ export function parseReviewResult(input: string): ReviewResult {
   } catch {
     throw new Error("Review result is not valid JSON");
   }
-  validateReviewResult(value as ReviewResult);
-  return value as ReviewResult;
+  validateReviewResult(value);
+  return value;
 }

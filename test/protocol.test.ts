@@ -120,3 +120,123 @@ test("protocol rejects findings that do not point to evidence", () => {
     /missing evidence/,
   );
 });
+
+test("external JSON rejects malformed shapes, enums and line numbers without leaking values", () => {
+  const rejected: unknown[] = [
+    null,
+    [],
+    {},
+    { ...result, status: "clean" },
+    { ...result, coverage: { ...result.coverage, files: { reviewed: 1, skipped: 0 } } },
+    { ...result, findings: [{ ...result.findings[0], severity: "urgent" }] },
+    {
+      ...result,
+      findings: [{ ...result.findings[0], location: { path: "a", startLine: 1.5, endLine: 2 } }],
+    },
+    { ...result, extra: "unexpected" },
+  ];
+  for (const value of rejected)
+    assert.throws(() => parseReviewResult(JSON.stringify(value)), /Invalid review result/);
+  assert.throws(() => parseReviewResult("{"), /not valid JSON/);
+  const secret = "sensitive-value-do-not-log";
+  assert.throws(
+    () => parseReviewResult(JSON.stringify({ ...result, status: secret })),
+    (error: unknown) => error instanceof Error && !error.message.includes(secret),
+  );
+});
+
+test("all evidence dependencies are validated including unattached branches", () => {
+  const producer = result.evidence[1];
+  assert.ok(producer && producer.kind !== "source");
+  assert.throws(
+    () =>
+      validateReviewResult({
+        ...result,
+        evidence: [...result.evidence, { ...producer, id: "unused", dependsOn: ["missing"] }],
+      }),
+    /missing dependency/,
+  );
+  assert.throws(
+    () =>
+      validateReviewResult({
+        ...result,
+        evidence: [...result.evidence, { ...producer, id: "unused", dependsOn: ["unused"] }],
+      }),
+    /Cycle/,
+  );
+  assert.throws(
+    () =>
+      validateReviewResult({
+        ...result,
+        evidence: [
+          ...result.evidence,
+          { ...producer, id: "a", dependsOn: ["b", "source-1"] },
+          { ...producer, id: "b", dependsOn: ["a"] },
+        ],
+      }),
+    /Cycle/,
+  );
+  assert.throws(
+    () =>
+      validateReviewResult({
+        ...result,
+        evidence: [result.evidence[0], { ...producer, dependsOn: ["source-1", "source-1"] }],
+      }),
+    /duplicate dependencies/,
+  );
+});
+
+test("evidence accepts a long chain in any node order without recursion", () => {
+  const producer = result.evidence[1];
+  assert.ok(producer && producer.kind !== "source");
+  const chain = Array.from({ length: 12_000 }, (_, index) => ({
+    ...producer,
+    id: `chain-${index}`,
+    dependsOn: [index === 0 ? "source-1" : `chain-${index - 1}`],
+  })).reverse();
+  assert.doesNotThrow(() =>
+    validateReviewResult({ ...result, evidence: [...chain, ...result.evidence] }),
+  );
+});
+
+test("protocol rejects contradictory completion, results and request scope", () => {
+  assert.throws(
+    () => validateReviewResult({ ...result, status: "passed" }),
+    /cannot contain findings/,
+  );
+  assert.throws(
+    () => validateReviewResult({ ...result, checks: [...result.checks, ...result.checks] }),
+    /Duplicate check/,
+  );
+  for (const coverage of [
+    { status: "not_run", processed: 1 },
+    { status: "complete", processed: 1, total: 2 },
+  ]) {
+    assert.throws(
+      () =>
+        validateReviewResult({
+          ...result,
+          coverage: {
+            ...result.coverage,
+            checks: { ...result.coverage.checks, deterministic: coverage },
+          },
+        }),
+      /cannot/,
+    );
+  }
+  assert.throws(
+    () => validateReviewRequest({ ...request, provider: "unknown" }),
+    /Invalid review request/,
+  );
+  assert.throws(
+    () =>
+      validateReviewRequest({
+        ...request,
+        snapshot: {
+          ...request.snapshot,
+          changedLines: [{ path: "missing.ts", startLine: 1, endLine: 1 }],
+        },
+      }),
+    /outside/,
+  );
+});

@@ -155,6 +155,8 @@ npm run --silent review -- scan --repo ../my-project --staged --format json --ou
 
 可用 `npm run demo:protocol` 查看合成 JSON 示例。字段定义见[协议类型](src/protocol/types.ts)，本地实测导出方式见[本地审查](#本地审查)。
 
+协议入口对请求和结果执行运行时校验：拒绝未知字段、缺失字段、无效枚举、非整数行号及矛盾的完成状态；证据引用必须存在且无循环。`parseReviewResult` 解析外部 JSON，`validateReviewRequest` 和 `validateReviewResult` 可直接校验未知数据，校验通过后提供 TypeScript 类型收窄。自定义元数据应保存在协议对象之外；当前 1.0 格式不接受额外字段。
+
 ## 工作方式
 
 ```mermaid

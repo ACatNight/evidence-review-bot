@@ -1,3 +1,5 @@
+import { validateEvidenceDependencies } from "./evidence.js";
+import { requestSchema, resultSchema, validateShape } from "./schema.js";
 import type {
   CheckCoverage,
   EvidenceNode,
@@ -25,6 +27,12 @@ function validateCheckCoverage(check: CheckCoverage, label: string): void {
   }
   if ((check.status === "partial" || check.status === "error") && !check.reason) {
     throw new Error(`${label} needs a reason when it is ${check.status}`);
+  }
+  if (check.status === "not_run" && check.processed !== 0) {
+    throw new Error(`${label} cannot process scope when not_run`);
+  }
+  if (check.status === "complete" && check.total !== undefined && check.processed !== check.total) {
+    throw new Error(`${label} cannot be complete with unprocessed scope`);
   }
 }
 
@@ -72,6 +80,7 @@ function validateEvidence(nodes: readonly EvidenceNode[]): Set<string> {
       if (node.dependsOn.length === 0) throw new Error(`Evidence ${node.id} has no dependencies`);
     }
   }
+  validateEvidenceDependencies(nodes);
   return ids;
 }
 
@@ -89,11 +98,37 @@ function validateRequest(request: ReviewRequest): void {
   for (const rule of request.policy.enabledRules) requireText(rule, "enabled rule");
 }
 
-export function validateReviewRequest(request: ReviewRequest): void {
-  validateRequest(request);
+export function validateReviewRequest(request: unknown): asserts request is ReviewRequest {
+  validateShape(requestSchema, request, "review request");
+  validateRequestScope(request as ReviewRequest);
 }
 
-export function validateReviewResult(result: ReviewResult): void {
+function validateRequestScope(request: ReviewRequest): void {
+  validateRequest(request);
+  const paths = new Set(request.snapshot.files.map((file) => file.path));
+  if (new Set(request.policy.enabledRules).size !== request.policy.enabledRules.length) {
+    throw new Error("Duplicate enabled rule");
+  }
+  for (const range of request.snapshot.changedLines) {
+    if (!paths.has(range.path) || range.endLine < range.startLine) {
+      throw new Error("Changed-line range is outside the declared snapshot scope");
+    }
+  }
+  for (const file of request.snapshot.files) {
+    for (const range of file.changedLines ?? []) {
+      if (range.path !== file.path || range.endLine < range.startLine) {
+        throw new Error("File changed-line range is outside its declared scope");
+      }
+    }
+  }
+}
+
+export function validateReviewResult(result: unknown): asserts result is ReviewResult {
+  validateShape(resultSchema, result, "review result");
+  validateResultSemantics(result as ReviewResult);
+}
+
+function validateResultSemantics(result: ReviewResult): void {
   if (result.protocolVersion !== "1.0") throw new Error("Unsupported review protocol version");
   requireText(result.runId, "runId");
   requireText(result.engineVersion, "engineVersion");
@@ -117,12 +152,29 @@ export function validateReviewResult(result: ReviewResult): void {
         throw new Error(`Finding references missing evidence: ${evidenceId}`);
     }
   }
+  const checkIds = new Set<string>();
   for (const check of result.checks) {
+    if (checkIds.has(check.id)) throw new Error("Duplicate check ID");
+    checkIds.add(check.id);
     if (!check.id || !CHECK_STATUSES.has(check.status))
       throw new Error(`Invalid check result: ${check.id}`);
     for (const findingId of check.findingIds) {
       if (!findingIds.has(findingId))
         throw new Error(`Check references missing finding: ${findingId}`);
     }
+  }
+  if (result.status === "passed" && result.findings.length > 0) {
+    throw new Error("Passed result cannot contain findings");
+  }
+  if (result.status === "findings" && result.findings.length === 0) {
+    throw new Error("Findings result must contain findings");
+  }
+  if (
+    (result.status === "passed" || result.status === "findings") &&
+    [...Object.values(result.coverage.checks), ...result.checks].some(
+      (check) => check.status === "partial" || check.status === "error",
+    )
+  ) {
+    throw new Error("Result with incomplete checks cannot be passed or findings");
   }
 }
