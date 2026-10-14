@@ -6,7 +6,7 @@
 
 <p align="center">
   开源 PR 审查引擎<br>
-  <strong>确定性规则 · 可追溯证据 · 审查覆盖率 · 可选 AI 分析</strong>
+  <strong>确定性规则 · 可追溯证据 · 审查覆盖率 · 平台无关</strong>
 </p>
 
 <p align="center">
@@ -25,6 +25,7 @@
   <a href="#快速体验">快速体验</a> ·
   <a href="#本地审查">本地审查</a> ·
   <a href="#当前能力">当前能力</a> ·
+  <a href="#报告与协议">报告与协议</a> ·
   <a href="#接入真实-pr">接入指南</a> ·
   <a href="#开发与验证">本地开发</a> ·
   <a href="#参与项目">参与项目</a>
@@ -32,7 +33,7 @@
 
 ---
 
-Evidence Review Bot 接收平台的 PR 事件，读取固定提交的变更快照，执行审查，并将结果发布回代码托管平台。报告会说明**检查了什么、发现了什么、哪些范围没有完成**。项目正在测试仓库阶段，适合评估报告方式和联调流程；检测效果与生产运行能力尚未经过充分验证。
+Evidence Review Bot 接收平台的 PR 事件，读取固定提交的变更快照，执行审查，并将结果发布回代码托管平台。报告会说明**检查了什么、发现了什么、哪些范围没有完成**。项目目前处于可运行的试点阶段，适合进行本地扫描、平台联调和报告格式评估；生产规模的检测效果仍需要更多真实项目验证。
 
 <table>
   <tr>
@@ -63,17 +64,31 @@ Evidence Review Bot 接收平台的 PR 事件，读取固定提交的变更快�
 
 ## 快速体验
 
-无需数据库、平台账号或 AI 密钥，就能先查看报告格式。需要 Node.js **22.22.2** 和 npm：
+需要 Git、Node.js **22.22.2** 和 npm。先从仓库运行本地扫描，无需数据库、平台账号或 AI 密钥：
 
 ```bash
 git clone --branch github https://github.com/ACatNight/evidence-review-bot.git
 cd evidence-review-bot
 npm ci
+npm run review -- scan --repo ../my-project --head WORKTREE
+```
+
+将 `../my-project` 替换为已有提交的目标 Git 仓库路径；路径含空格时加双引号。命令读取该仓库工作区相对 `HEAD` 的变化，输出中文报告。
+
+也可从 Gitee 获取相同代码，将上面的克隆命令替换为：
+
+```bash
+git clone --branch gitee https://gitee.com/mournic/evidence-review-bot.git
+```
+
+只想预览平台报告格式时，运行以下命令：
+
+```bash
 npm run demo:report -- github
 npm run demo:report -- gitee
 ```
 
-这两个命令生成**离线合成报告**：不读取真实仓库代码，不执行扫描，不连接数据库或模型，也不会发布评论。报告展示候选问题、审查覆盖率、未检查范围和未运行的检查；不能用来判断检测准确率。真实接入请按下方的[接入步骤](#接入真实-pr)操作。
+这两个命令生成**离线合成报告**，展示候选、覆盖率与未检查范围；不扫描真实仓库，不能用来判断检测准确率。自动审查 PR 请按[接入步骤](#接入真实-pr)配置。
 
 ## 本地审查
 
@@ -111,15 +126,34 @@ npm run --silent review -- scan --repo ../my-project --staged --format json --ou
 
 | 能力 | 当前状态 | 边界 |
 | --- | --- | --- |
+| 本地 Git 扫描 | 已实现 | 提交、暂存区和工作区；文本或协议 JSON；仅 SEC-001 |
+| 审查协议 1.0 | 已实现基础契约 | 候选、证据引用、分项覆盖和未检查原因；用于 JSON 集成 |
 | GitHub PR 自动审查 | 已实现测试仓库链路 | GitHub App Webhook、固定 SHA 快照、Check 汇总 |
 | Gitee PR 自动审查 | 已实现测试仓库链路 | 仓库 WebHook、固定 SHA 快照、中文 PR 评论报告 |
 | 确定性规则 SEC-001 | 已实现 | 仅匹配指定 GitHub Token 与 PEM 格式；不验证凭据有效性 |
 | AI 安全审查 | 可选，默认关闭 | 仅对授权仓库发送尽力脱敏的变更代码；输出是待人工核实的候选 |
 | 审查覆盖率 | 已显示 | 区分已检查、部分完成和未运行；覆盖率不是安全评分或检出率 |
-| Lint、构建、测试、依赖审计 | 机器人尚未执行 | 本仓库的 CI 独立运行这些检查，结果不代表目标 PR 已被机器人检查 |
+| 目标项目的 Lint、构建、测试、依赖审计 | 尚未执行 | 本项目 CI 配置了独立质量检查；目标 PR 报告仍标记为未运行 |
+| npm 包、管理界面、Docker Compose、跨平台安装器 | 尚未提供 | 当前从仓库运行；部署脚本面向 Windows 本机试点 |
 | GitLab、反馈、抑制、回放、完整审计 | 规划中 | 当前没有可供用户启用的实现 |
 
 **零条候选不等于代码安全。** 文件读取失败、超出限制、AI 调用失败和未运行的检查会在报告中体现。SEC-001 目前识别 GitHub 经典令牌、fine-grained PAT 和部分 PEM 私钥格式，仅报告涉及本次变更行的候选；其他服务密钥、普通密码和复杂 PEM 变体可能漏报。完整匹配条件见[规则实现](src/rules/secret.ts)。
+
+## 报告与协议
+
+文本报告提供扫描范围、快照标识、候选位置、脱敏摘要和各项检查的覆盖状态。JSON 输出采用 `protocolVersion: "1.0"`，适合接入 CI 或其他工具：
+
+| 字段 | 内容 |
+| --- | --- |
+| `runId`、`engineVersion`、`ruleSetVersion` | 本次结果标识及引擎、规则版本 |
+| `status` | `passed`、`findings`、`partial` 或 `failed` |
+| `findings` | 规则、严重性、代码位置、解释、修复建议和证据引用 |
+| `evidence` | 代码来源、规则或模型依据及依赖关系 |
+| `coverage`、`skipped`、`checks` | 分项处理范围、未检查原因和检查状态 |
+
+消费者应同时检查 `status` 和分项覆盖。空变更时，整体状态可以是 `passed`，而 SEC-001 为 `not_run`；`partial` 状态下也可能包含已发现的候选。`confidence: "deterministic"` 表示可复现的规则匹配，凭据有效性仍需人工核实。
+
+可用 `npm run demo:protocol` 查看合成 JSON 示例。字段定义见[协议类型](src/protocol/types.ts)，本地实测导出方式见[本地审查](#本地审查)。
 
 ## 工作方式
 
@@ -179,11 +213,15 @@ npm test
 
 一次性执行本地质量门禁可使用 `npm run verify`，它依次运行格式检查、Lint、类型检查和测试。依赖漏洞检查使用 `npm run audit`，只读取锁文件，不安装或执行项目脚本。
 
+推荐的开发顺序是：先运行 `npm ci`，修改后运行 `npm run format`，提交前运行 `npm run verify` 和 `npm run audit`。测试默认串行执行，避免共享数据库和临时仓库之间互相影响；没有设置 `TEST_DATABASE_URL` 时，数据库集成测试会跳过。
+
 `npm test` 会构建项目并运行测试；数据库集成测试需设置 `TEST_DATABASE_URL`，指向名为 `evidence_review_bot_test` 的专用 PostgreSQL 数据库。测试会清理该库的测试数据，请勿使用业务数据库。本仓库的 GitHub Actions 还运行 npm 依赖审计和 CodeQL。这些是**项目自身的质量检查**，不是对接入仓库的 PR 执行的检查。
 
 ## 参与项目
 
 欢迎通过 Issue 提供可复现的错误、部署问题和测试仓库反馈。提交代码前请运行上面的本地检查；涉及检测规则的改动应同时说明正例、反例、误报边界和覆盖变化。安全问题请避免在公开 Issue 中粘贴真实凭据或私有代码。
+
+提交信息使用 Conventional Commits，例如 `feat: 增加规则`、`fix: 修复快照读取`、`chore: 更新质量门禁`。涉及报告协议、平台适配器或规则的改动，应同时更新对应测试和 README 的能力边界。
 
 ## 许可证
 
