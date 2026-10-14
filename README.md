@@ -189,12 +189,24 @@ flowchart LR
 
 在仓库根目录运行配置向导，再启动服务：
 
+Windows 用户也可双击仓库根目录的 **`review-bot.cmd`**，通过菜单完成配置、启动、状态检查和停止。菜单启动时会安装缺失的依赖、构建项目、迁移数据库并启动服务；首次使用请选择「1. Configure」，填写资料后选择「2. Start」。配置与密钥保存在仓库外；Webhook Secret 和 Review HMAC 文件路径留空时自动生成 DPAPI 文件，仅当前 Windows 用户可解密。GitHub App 私钥、数据库密码、Gitee 令牌和公网入口仍需提前准备。
+
 ```powershell
 powershell -NoProfile -File .\scripts\configure-windows.ps1
 powershell -NoProfile -File .\scripts\start-windows.ps1
 ```
 
 配置保存在仓库外，仅记录密钥路径。需要更改保存目录时，先设置 `EVIDENCE_REVIEW_BOT_HOME`。停止服务使用 `powershell -NoProfile -File .\scripts\stop-windows.ps1`。
+
+自动生成的 Webhook Secret 需要填入平台。菜单选择 **5 → github 或 gitee**，即可将配置中的密钥复制到剪贴板，再粘贴到平台 Webhook Secret 输入框。也可在本机 PowerShell 手动复制（不要粘贴到聊天或 Issue）：
+
+```powershell
+. .\scripts\local-common.ps1
+Read-ReviewBotSecret (Join-Path (Get-ReviewBotHome) 'github-webhook-secret.dpapi') | Set-Clipboard
+# Gitee 使用 gitee-webhook-secret.dpapi；如已填写自有密钥路径，请读取该文件。
+```
+
+复制后需要确保平台上的密钥与本机一致。状态检查会显示受管进程、API/数据库连通性和日志位置，但不能证明平台已投递事件或审查已完成。首次验收顺序：**服务健康 → 平台投递成功 → Worker 完成 → PR 出现报告**。Gitee 报告在 PR 评论区，GitHub 报告目前在 PR 的 Checks 区；GitHub App 权限无需增加评论写权限。报告开头会显示结论、候选数量和下一步建议，部分完成时会明确提示未检查范围。
 
 GitHub App 需安装到目标仓库，仓库权限设置为 `Contents: Read-only`、`Pull requests: Read-only`、`Checks: Read and write`，订阅 `Pull request` 事件，回调地址填写 `https://你的域名/webhooks/github`。
 

@@ -108,7 +108,7 @@ try {
   if ($config.ngrokEnabled) {
     $env:NGROK_AUTHTOKEN = Read-ReviewBotSecret $config.ngrokAuthtokenFile
     try {
-      $tunnel = Start-Process -FilePath $config.ngrokExecutablePath -ArgumentList @('http', "127.0.0.1:$($config.port)", '--log=stdout', '--log-format=json') -WorkingDirectory $homeDirectory -WindowStyle Hidden -RedirectStandardOutput (Join-Path $homeDirectory 'tunnel-out.log') -RedirectStandardError (Join-Path $homeDirectory 'tunnel-error.log') -PassThru
+      $tunnel = Start-Process -FilePath $config.ngrokExecutablePath -ArgumentList @('http', "127.0.0.1:$($config.port)", "--url=https://$($config.ngrokDomain)", '--log=stdout', '--log-format=json') -WorkingDirectory $homeDirectory -WindowStyle Hidden -RedirectStandardOutput (Join-Path $homeDirectory 'tunnel-out.log') -RedirectStandardError (Join-Path $homeDirectory 'tunnel-error.log') -PassThru
     } finally {
       Remove-Item Env:NGROK_AUTHTOKEN -ErrorAction SilentlyContinue
     }

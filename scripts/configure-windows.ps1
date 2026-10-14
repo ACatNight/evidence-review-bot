@@ -16,6 +16,20 @@ function Require-File([string] $label, [string] $path) {
   }
 }
 
+function Get-OrCreateSecretFile([string] $path, [string] $name) {
+  if ($path) { return $path }
+  $target = Join-Path $homeDirectory "$name.dpapi"
+  if (-not (Test-Path -LiteralPath $target)) {
+    $bytes = New-Object byte[] 32
+    $generator = [Security.Cryptography.RandomNumberGenerator]::Create()
+    try { $generator.GetBytes($bytes) } finally { $generator.Dispose() }
+    $hex = [BitConverter]::ToString($bytes).Replace('-', '').ToLowerInvariant()
+    $hex | ConvertTo-SecureString -AsPlainText -Force | ConvertFrom-SecureString | Set-Content -LiteralPath $target
+  }
+  Write-Host "Secret file ready: $target"
+  return $target
+}
+
 if ($StateDirectory) { $env:EVIDENCE_REVIEW_BOT_HOME = $StateDirectory }
 $homeDirectory = Get-ReviewBotHome
 New-Item -ItemType Directory -Path $homeDirectory -Force | Out-Null
@@ -28,8 +42,10 @@ $databaseUrl = Ask 'PostgreSQL DATABASE_URL (without password)' $prior.databaseU
 $databasePasswordFile = Ask 'PostgreSQL password file (.dpapi or text)' $prior.databasePasswordFile
 $appId = Ask 'GitHub App ID' $prior.githubAppId
 $privateKeyPath = Ask 'GitHub App private key PEM path' $prior.githubPrivateKeyPath
-$webhookSecretFile = Ask 'GitHub App Webhook Secret file (.dpapi or text)' $prior.githubWebhookSecretFile
-$reviewHmacKeyFile = Ask 'Review HMAC key file (.dpapi or text)' $prior.reviewHmacKeyFile
+$webhookSecretFile = Ask 'GitHub App Webhook Secret file (blank to generate)' $prior.githubWebhookSecretFile
+$reviewHmacKeyFile = Ask 'Review HMAC key file (blank to generate)' $prior.reviewHmacKeyFile
+$webhookSecretFile = Get-OrCreateSecretFile $webhookSecretFile 'github-webhook-secret'
+$reviewHmacKeyFile = Get-OrCreateSecretFile $reviewHmacKeyFile 'review-hmac-key'
 $port = Ask 'Local API port' $(if ($prior.port) { [string] $prior.port } else { '3000' })
 $postgresCtlPath = Ask 'pg_ctl.exe path (blank if PostgreSQL is managed separately)' $prior.postgresCtlPath
 $postgresDataPath = if ($postgresCtlPath) {
@@ -59,7 +75,8 @@ if ($giteeEnabled) {
   $giteeOwner = Ask 'Gitee repository owner' $prior.giteeOwner
   $giteeRepo = Ask 'Gitee repository name' $prior.giteeRepo
   $giteeRepositoryId = Ask 'Gitee numeric repository ID' $prior.giteeRepositoryId
-  $giteeWebhookSecretFile = Ask 'Gitee Webhook signing key file (optional until webhook setup)' $prior.giteeWebhookSecretFile
+  $giteeWebhookSecretFile = Ask 'Gitee Webhook signing key file (blank to generate)' $prior.giteeWebhookSecretFile
+  $giteeWebhookSecretFile = Get-OrCreateSecretFile $giteeWebhookSecretFile 'gitee-webhook-secret'
 }
 $aiDefault = if ($prior.aiEnabled) { 'y' } else { 'n' }
 $aiEnabled = (Ask 'Enable AI review for selected repositories? (y/n)' $aiDefault) -match '^[yY]$'
